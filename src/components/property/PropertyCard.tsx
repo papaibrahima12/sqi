@@ -35,8 +35,6 @@ export const PropertyCard = ({
   isAvailable = true
 }: PropertyCardProps) => {
   const navigate = useNavigate();
-  console.log('price', price);
-  console.log('prix_journalier', prix_journalier);
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();

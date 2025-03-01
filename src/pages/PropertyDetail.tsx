@@ -505,6 +505,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       />
     ));
   };
+  console.log('auth ?', isAdmin);
 
   const getPropertyImageUrl = (photoUrl) => {
     console.log('photoUrl', photoUrl);
@@ -851,9 +852,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
               {photos.map((photo) => (
                 <CarouselItem key={photo.id} className="h-[500px]">
                   <img
-                    src={photo.url ? 
-                      supabase.storage.from('property_images').getPublicUrl(photo.url).data.publicUrl :
-                      "/placeholder.svg"
+                    src={getPropertyImageUrl(photo.url)
                     }
                     alt={`Vue de ${property.libelle}`}
                     className="w-full h-full object-cover"
@@ -866,10 +865,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
           </Carousel>
         ) : (
           <img
-            src={photos[0]?.url ? 
-              supabase.storage.from('property_images').getPublicUrl(photos[0].url).data.publicUrl :
-              "/placeholder.svg"
-            }
+            src={getPropertyImageUrl(photos[0].url)}
             alt={`Vue principale de ${property.libelle}`}
             className="w-full h-full object-cover"
           />

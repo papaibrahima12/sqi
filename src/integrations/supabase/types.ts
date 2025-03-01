@@ -39,6 +39,36 @@ export type Database = {
         }
         Relationships: []
       }
+      client: {
+        Row: {
+          id: number
+          prenom: string
+          nom: string
+          email: string
+          telephone:string;
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: number
+          prenom: string
+          nom: string
+          email: string
+          telephone:string;
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: number
+          prenom?: string
+          nom?: string
+          email?: string
+          telephone:string;
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       bien: {
         Row: {
           created_at: string | null
