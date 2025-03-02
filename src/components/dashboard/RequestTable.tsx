@@ -56,7 +56,7 @@ type Request = {
   forfait: string | null;
 };
 
-type RequestStatus = "en_attente" | "approuve" | "refuse" | "all";
+type RequestStatus = "vente" | "location" | "all";
 
 export function RequestTable() {
   const { toast } = useToast();
@@ -85,7 +85,7 @@ export function RequestTable() {
         .order("created_at", { ascending: false });
 
       if (selectedStatus !== "all") {
-        query = query.eq("statut", selectedStatus);
+        query = query.eq("type_demande", selectedStatus);
       }
 
       const { data, error } = await query;
@@ -582,10 +582,9 @@ export function RequestTable() {
             <SelectValue placeholder="Filtrer par statut" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="en_attente">En attente</SelectItem>
-            <SelectItem value="approuve">Approuvé</SelectItem>
-            <SelectItem value="refuse">Refusé</SelectItem>
+            <SelectItem value="all">Tous les types</SelectItem>
+            <SelectItem value="vente">Vente</SelectItem>
+            <SelectItem value="location">Location</SelectItem>
           </SelectContent>
         </Select>
       </div>

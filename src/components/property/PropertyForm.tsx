@@ -44,9 +44,10 @@ const formSchema = z.object({
 
 interface PropertyFormProps {
   onSuccess?: () => void;
+  isOpen?: (value: boolean) => void; // Corrected type definition
 }
 
-export default function PropertyForm({ onSuccess }: PropertyFormProps) {
+export default function PropertyForm({ onSuccess, isOpen }: PropertyFormProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -119,11 +120,7 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setLoading(true);
-
-      // Generate a reference for the property
       const reference = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-      // Create the property
       const { data: propertyData, error: propertyError } = await supabase.from("bien").insert({
         libelle: values.libelle,
         type_bien: values.type_bien,
@@ -141,7 +138,6 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
 
       if (propertyError) throw propertyError;
 
-      // Upload images if any
       if (uploadedImages.length > 0) {
         for (const { file } of uploadedImages) {
           const fileExt = file.name.split('.').pop();
@@ -177,7 +173,7 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate("/dashboard/properties");
+        navigate("/dashboard/biens");
       }
     } catch (error) {
       console.error("Error:", error);
@@ -416,7 +412,7 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate("/dashboard/properties")}
+              onClick={() => isOpen && isOpen(false)}
               disabled={loading}
             >
               Annuler

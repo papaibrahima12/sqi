@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+
 import {
   Carousel,
   CarouselContent,
@@ -53,6 +53,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const numericId = id ? parseInt(id, 10) : NaN;
+
 
   const form = useForm({
     defaultValues: {
@@ -146,11 +147,12 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
           date_debut,
           date_fin,
           statut,
-          demande (
-            nom,
+          client (
             prenom,
+            nom,
             email,
-            telephone
+            telephone,
+            adresse
           ),
           bien(
           libelle,
@@ -211,8 +213,9 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
         .eq('id', numericId);
 
       if (error) throw error;
+      navigate('/dashboard/biens');
     },
-    onSuccess: () => {
+  onSuccess: () => {
       toast({
         title: "Modifications enregistrées",
         description: "Les modifications ont été enregistrées avec succès",
@@ -273,11 +276,10 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
 
     toast({
       title: "Demande envoyée",
-      description: "Votre demande a été envoyée avec succès",
+      description: "Votre demande a été prise en compte. Un de nos agents vous contactera dans les plus brefs délais pour finaliser votre réservation. Merci de votre confiance !",
     });
     setOpen(false);
   };
-
   const { data: activeLocationWithDoc } = useQuery({
     queryKey: ['locationWithDoc', numericId],
     queryFn: async () => {
@@ -422,14 +424,14 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
         <div key={location.id} className="bg-gray-50 p-4 rounded-lg">
           <div className="flex justify-between items-center mb-2">
             <div className="font-medium">
-              {location.demande?.nom} {location.demande?.prenom}
+              {location.client?.nom} {location.client?.prenom}
             </div>
             <div className="text-sm text-gray-600">
               Du {format(new Date(location.date_debut), 'dd/MM/yyyy')} au {format(new Date(location.date_fin), 'dd/MM/yyyy')}
             </div>
           </div>
           <div className="text-sm text-gray-600">
-            {location.demande?.email} - {location.demande?.telephone}
+            {location.client?.email} - {location.client?.telephone}
           </div>
           <div className="mt-2 flex justify-between items-center">
             <div className="flex flex-col gap-1">
@@ -493,7 +495,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
     );
   }
 
-  const isPropertyBookable = property.statut === 'disponible' && !approvedRequest;
+  const isPropertyBookable = property.statut === 'disponible';
   const photos = property.photo || [];
   const hasMultiplePhotos = photos.length > 1;
 
@@ -505,10 +507,8 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       />
     ));
   };
-  console.log('auth ?', isAdmin);
 
   const getPropertyImageUrl = (photoUrl) => {
-    console.log('photoUrl', photoUrl);
     if (!photoUrl) return "/placeholder.svg";
 
     if(photoUrl.startsWith('https://')) return photoUrl;
@@ -654,7 +654,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
             <div className="bg-gray-50 p-6 rounded-lg h-fit space-y-6">
               <div>
                 <div className="text-3xl font-bold mb-2">
-                  {property.prix_journalier?.toLocaleString()} FCFA{property.type_transaction === 'location' ? '/jour' : ''}
+                  {property.type_transaction === 'location' ? property.prix_journalier?.toLocaleString() + ' FCFA /jour' : property.price?.toLocaleString() + ' FCFA'}
                 </div>
                 <div className="flex items-center gap-2 text-gray-600 mb-6">
                   <Calendar className="h-4 w-4" />
@@ -834,7 +834,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
 
   return (
     <div className="min-h-screen bg-sqi-white">
-      <div className="container mx-auto px-4 py-4 mt-header">
+      <div className="container flex justify-between items-end mx-auto px-4 py-4 mt-header">
         <Button
           variant="ghost"
           onClick={handleBackClick}
@@ -843,6 +843,21 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
           <ArrowLeft className="h-5 w-5" />
           Retour
         </Button>
+        <div className="flex gap-2 items-end">
+          <Button
+              variant="ghost"
+              className="flex text-white items-center gap-2 bg-black ml-auto"
+              onClick={() => navigate(`images`)}
+          >
+            Gérer les images
+          </Button>
+          <Button
+              variant="ghost"
+              className="flex text-white items-center gap-2 bg-red-600 ml-auto"
+          >
+            Supprimer le bien
+          </Button>
+        </div>
       </div>
 
       <div className="relative w-full h-[500px]">

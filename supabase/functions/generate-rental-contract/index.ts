@@ -25,92 +25,24 @@ serve(async (req) => {
     const pngImageBytes = await fetch(pngUrl).then((res) => res.arrayBuffer())
     const pngImage = await pdfDoc.embedPng(pngImageBytes)
     const pngDims = pngImage.scale(0.5)
-    // Add content to the PDF
 
-    page.drawText('CONTRAT DE LOCATION', {
+    page.drawText(`
+    Ce contrat de location journalière est conclu entre le bailleur en tant que entité SQI et le locataire ${location?.client.prenom + " " + location?.client.nom}. 
+    Le bailleur met à disposition du locataire le bien ${location?.property?.libelle} situé à ${location?.property?.residence?.nom} pour une durée d’une journée, à compter du ${new Date(location.date_debut).toLocaleDateString()} jusqu’au ${new Date(location.date_fin).toLocaleDateString()}. 
+    Le montant de la location est fixé à ${location?.property?.prix_journalier} payable par virement ou par espèces.
+    Le locataire s’engage à utiliser les lieux conformément à leur destination, à respecter les règles de voisinage et à rendre le bien en bon état.
+     Toute dégradation constatée sera à la charge du locataire. Le bailleur se réserve le droit de retenir tout ou partie du dépôt de garantie d’un montant de [Montant du Dépôt de Garantie] en cas de dommages.
+    Le locataire reconnaît avoir reçu les clés du bien et s’engage à les restituer à la fin de la location. En cas de non-respect des termes du contrat, le bailleur pourra mettre fin à la location sans remboursement. Les parties déclarent accepter les conditions de la présente convention en toute bonne foi
+    `, {
       x: 50,
       y: height - 50,
       size: 20,
       font,
+      padding: 20,
       color: rgb(0, 0, 0),
     })
 
-    // Add tenant information
-    page.drawText(`ENTRE LES SOUSSIGNÉS:`, {
-      x: 50,
-      y: height - 100,
-      size: 12,
-      font,
-    })
 
-    page.drawText(`Le propriétaire: SQI SERVICES`, {
-      x: 50,
-      y: height - 130,
-      size: 12,
-      font,
-    })
-
-    page.drawText(`ET`, {
-      x: 50,
-      y: height - 160,
-      size: 12,
-      font,
-    })
-
-    page.drawText(`Le locataire: ${location.tenant.prenom} ${location.tenant.nom}`, {
-      x: 50,
-      y: height - 190,
-      size: 12,
-      font,
-    })
-
-    // Add property information
-    page.drawText(`BIEN LOUÉ:`, {
-      x: 50,
-      y: height - 230,
-      size: 12,
-      font,
-    })
-
-    page.drawText(`${location.property.libelle}`, {
-      x: 50,
-      y: height - 250,
-      size: 12,
-      font,
-    })
-
-    // Add rental terms
-    page.drawText(`DURÉE DE LA LOCATION:`, {
-      x: 50,
-      y: height - 290,
-      size: 12,
-      font,
-    })
-
-    page.drawText(`Du ${new Date(location.date_debut).toLocaleDateString()} au ${new Date(location.date_fin).toLocaleDateString()}`, {
-      x: 50,
-      y: height - 310,
-      size: 12,
-      font,
-    })
-
-    // Add financial terms
-    page.drawText(`CONDITIONS FINANCIÈRES:`, {
-      x: 50,
-      y: height - 350,
-      size: 12,
-      font,
-    })
-
-    page.drawText(`Loyer journalier: ${location.property?.prix_journalier} FCFA`, {
-      x: 50,
-      y: height - 370,
-      size: 12,
-      font,
-    })
-
-
-    // Add signature fields
     page.drawText(`Fait à Dakar, le ${new Date().toLocaleDateString()}`, {
       x: 50,
       y: height - 450,
@@ -154,10 +86,9 @@ serve(async (req) => {
       throw uploadError
     }
 
-    // Create a signed URL for the uploaded PDF
     const { data: { signedUrl }, error: signedUrlError } = await supabase.storage
       .from('documents')
-      .createSignedUrl(fileName, 300) // URL valid for 5 minutes
+      .createSignedUrl(fileName, 300)
 
     if (signedUrlError) {
       throw signedUrlError

@@ -45,6 +45,7 @@ export type Database = {
           prenom: string
           nom: string
           email: string
+          adresse: string
           telephone:string;
           created_at: string | null
           updated_at: string | null
@@ -54,6 +55,7 @@ export type Database = {
           prenom: string
           nom: string
           email: string
+          adresse: string
           telephone:string;
           created_at?: string | null
           updated_at?: string | null
@@ -63,6 +65,7 @@ export type Database = {
           prenom?: string
           nom?: string
           email?: string
+          adresse?: string
           telephone:string;
           created_at?: string | null
           updated_at?: string | null
@@ -249,6 +252,7 @@ export type Database = {
       location: {
         Row: {
           bien_id: number | null
+          client_id: number | null
           caution: number
           cni_url: string | null
           commentaire: string | null
@@ -256,6 +260,7 @@ export type Database = {
           created_at: string | null
           date_debut: string
           date_fin: string
+          forfait: string
           date_signature: string | null
           demande_id: number | null
           id: number
@@ -265,6 +270,7 @@ export type Database = {
         }
         Insert: {
           bien_id?: number | null
+          client_id?: number | null
           caution: number
           cni_url?: string | null
           commentaire?: string | null
@@ -272,6 +278,7 @@ export type Database = {
           created_at?: string | null
           date_debut: string
           date_fin: string
+          forfait: string
           date_signature?: string | null
           demande_id?: number | null
           id?: number
@@ -281,6 +288,7 @@ export type Database = {
         }
         Update: {
           bien_id?: number | null
+          client_id?: number | null
           caution?: number
           cni_url?: string | null
           commentaire?: string | null
@@ -288,6 +296,7 @@ export type Database = {
           created_at?: string | null
           date_debut?: string
           date_fin?: string
+          forfait: string
           date_signature?: string | null
           demande_id?: number | null
           id?: number
@@ -308,6 +317,13 @@ export type Database = {
             columns: ["demande_id"]
             isOneToOne: false
             referencedRelation: "demande"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "client"
             referencedColumns: ["id"]
           },
         ]

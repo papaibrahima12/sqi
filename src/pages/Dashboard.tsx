@@ -20,6 +20,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import PropertyDetail from "@/pages/PropertyDetail";
+import PropertyImagesPage from "@/components/property/PropertyImagePage.tsx";
 
 const DashboardHome = () => {
   const { data: stats, isLoading, error } = useQuery({
@@ -124,7 +125,7 @@ const DashboardHome = () => {
             <div className="mt-4">
               <div className="text-sm">
                 Montant moyen : {stats?.locations.length 
-                  ? Math.round(stats.locations.reduce((acc, curr) => acc + Number(curr.montant_mensuel), 0) / stats.locations.length)
+                  ? Math.round(stats.locations.reduce((acc, curr) => acc + Number(curr.prix_journalier), 0) / stats.locations.length)
                   : 0} FCFA
               </div>
             </div>
@@ -243,6 +244,7 @@ export default function Dashboard() {
             <Route path="locations" element={<DashboardLocations />} />
             <Route path="demandes" element={<DashboardDemandes />} />
             <Route path="property/:id" element={<PropertyDetail isAdmin={true} />} />
+            <Route path="property/:id/images" element={<PropertyImagesPage isAdmin={true} />} />
           </Routes>
         </main>
       </div>

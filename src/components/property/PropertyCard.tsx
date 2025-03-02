@@ -47,7 +47,6 @@ export const PropertyCard = ({
 
   // Gestion cohérente des URLs d'images
   let finalImageUrl = imageUrl;
-  console.log('image URL',finalImageUrl);
   if (imageUrl && !imageUrl.startsWith('http')) {
     const { data } = supabase.storage.from('property_images').getPublicUrl(imageUrl);
     finalImageUrl = data.publicUrl;
@@ -95,12 +94,12 @@ export const PropertyCard = ({
           <Button
             className="w-full bg-sqi-gold hover:bg-sqi-gold/90 text-sqi-white transition-all duration-default group"
             onClick={(e) => {
+              navigate(`/property/${id}`)
               e.preventDefault();
               e.stopPropagation();
               onSelect();
             }}
-            disabled={!isAvailable}
-          >
+            >
             <span className="relative z-10 group-hover:text-white transition-colors">
               {isAvailable ? "Je suis intéressé" : "Non disponible"}
             </span>

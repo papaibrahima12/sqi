@@ -268,7 +268,7 @@ const Index = () => {
                 <Button
                   variant="outline"
                   className={`transition-all duration-default ${
-                    selectedLocation === "sacre-coeur" ? "bg-sqi-gold text-sqi-white" : ""
+                      selectedLocation === "sacre-coeur" ? "bg-sqi-gold text-sqi-white" : ""
                   }`}
                   onClick={() =>
                     setSelectedLocation(selectedLocation === "sacre-coeur" ? null : "sacre-coeur")

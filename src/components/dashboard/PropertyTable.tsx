@@ -29,9 +29,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import React from "react";
+import React, {useState} from "react";
 import { AvailabilityCalendar } from "@/components/property/AvailabilityCalendar";
 import { useToast } from "@/hooks/use-toast";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select.tsx";
 
 const propertySchema = z.object({
   libelle: z.string().min(1, "Le libellé est requis"),
@@ -39,8 +40,10 @@ const propertySchema = z.object({
   price: z.number().min(0, "Le prix doit être positif"),
 });
 
+type Residence = "Hann Mariste" | "Sacré cœur" |"all" ;
+
 export const PropertyTable = () => {
-  const navigate = useNavigate();
+  const [selectedResidence, setSelectedResidence] = useState<Residence>("all");
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
@@ -52,9 +55,9 @@ export const PropertyTable = () => {
   });
 
   const { data: properties, isLoading } = useQuery({
-    queryKey: ['properties'],
+    queryKey: ['properties', selectedResidence],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const query = supabase
         .from('bien')
         .select(`
           *,
@@ -68,9 +71,17 @@ export const PropertyTable = () => {
           )
         `);
 
+      const { data, error } = await query;
       if (error) throw error;
-      return data as Property[];
-    },
+
+      const filteredData = selectedResidence === "all"
+          ? data
+          : data.filter(property => property.residence.nom === selectedResidence);
+
+      console.log("Données filtrées :", filteredData);
+
+      return filteredData as Property[];
+      },
   });
 
   const handleBack = () => {
@@ -192,10 +203,24 @@ export const PropertyTable = () => {
     queryClient.invalidateQueries({ queryKey: ['properties'] });
   };
 
+  const handleResidenceChange = (value: string) => {
+    setSelectedResidence(value as Residence);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-sqi-black">Liste des biens</h1>
+        <Select value={selectedResidence} onValueChange={handleResidenceChange}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filtrer par disponibilité" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes les résidences</SelectItem>
+            <SelectItem value="Hann Mariste">Hann Mariste</SelectItem>
+            <SelectItem value="Sacré cœur">Sacré cœur</SelectItem>
+          </SelectContent>
+        </Select>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -209,7 +234,10 @@ export const PropertyTable = () => {
                 Remplissez les informations ci-dessous pour créer un nouveau bien immobilier.
               </DialogDescription>
             </DialogHeader>
-            <PropertyForm onSuccess={handlePropertyCreated} />
+            <PropertyForm
+                onSuccess={handlePropertyCreated}
+                isOpen={(value) => setOpen(value)}
+            />
           </DialogContent>
         </Dialog>
       </div>
