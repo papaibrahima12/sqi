@@ -56,6 +56,14 @@ type Request = {
   forfait: string | null;
 };
 
+type Client = {
+  id: number;
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone: string;
+};
+
 type RequestStatus = "vente" | "location" | "all";
 
 export function RequestTable() {
@@ -67,6 +75,13 @@ export function RequestTable() {
   const [visitScheduled, setVisitScheduled] = useState(false);
   const [motifPerte, setMotifPerte] = useState<string>("");
   const [idDocument, setIdDocument] = useState<File | null>(null);
+  const [showExistingClientDialog, setShowExistingClientDialog] = useState(false);
+  const [existingClients, setExistingClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [clientOption, setClientOption] = useState<"existing" | "new">("new");
+  const [tempVenteStatus, setTempVenteStatus] = useState<Request["statut_vente"] | null>(null);
+  const [isStatusUpdating, setIsStatusUpdating] = useState(false);
+
 
   const { data: requests, refetch } = useQuery({
     queryKey: ["requests", selectedStatus],
@@ -298,6 +313,7 @@ export function RequestTable() {
             description: "Veuillez charger la piece d'identité svp !",
             variant: "destructive",
           });
+          updates.statut_vente = "gagnee";
           return;
         }
       }
@@ -312,6 +328,7 @@ export function RequestTable() {
           });
           return;
         }
+        updates.statut_vente = "negociation";
         setShowDetailsDialog(false);
         setSelectedRequest(null);
       }
@@ -328,6 +345,8 @@ export function RequestTable() {
         title: "Statut mis à jour",
         description: "Le statut de la demande a été mis à jour avec succès.",
       });
+
+      window.location.reload();
 
       setShowDetailsDialog(false);
       setSelectedRequest(null);
@@ -346,7 +365,7 @@ export function RequestTable() {
   const handleStatusUpdate = async (request: Request, newStatus: "approuve" | "refuse") => {
     try {
       if (request.type_demande === "location" && newStatus === "approuve") {
-        if (!visitScheduled) {
+        if (!request.commentaire) {
           toast({
             title: "Visite requise",
             description: "Veuillez d'abord programmer une visite avant d'approuver la demande",
@@ -355,26 +374,15 @@ export function RequestTable() {
           return;
         }
 
-        if (!idDocument) {
-          toast({
-            title: "Document requis",
-            description: "Veuillez charger une pièce d'identité avant d'approuver la demande",
-            variant: "destructive",
-          });
-          return;
-        }
+        // if (!idDocument) {
+        //   toast({
+        //     title: "Document requis",
+        //     description: "Veuillez charger une pièce d'identité avant d'approuver la demande",
+        //     variant: "destructive",
+        //   });
+        //   return;
+        // }
 
-        try {
-          await uploadIdDocument(idDocument, request.id);
-        } catch (error) {
-          console.error("Erreur lors du téléchargement du document:", error);
-          toast({
-            title: "Erreur",
-            description: "Erreur lors du téléchargement de la pièce d'identité",
-            variant: "destructive",
-          });
-          return;
-        }
       }
 
       const { error: updateError } = await supabase
@@ -385,26 +393,68 @@ export function RequestTable() {
       if (updateError) throw updateError;
 
       if (newStatus === "approuve" && request.type_demande === "location" && request.bien) {
-        const { error: locationError } = await supabase
-          .from("location")
-          .insert({
-            bien_id: request.bien.id,
-            demande_id: request.id,
-            date_debut: request.date_debut_location,
-            date_fin: request.date_fin_location,
-            prix_journalier: request.bien.prix_journalier,
-            caution: request.bien.price * 2,
-            statut: 'en_cours'
-          });
+          const {data: existLoc, error: existLocError} = await
+              supabase.from('client')
+                      .select('*')
+                      .eq('email', request.email)
+                      .single();
+          if (existLocError) throw existLocError;
+          if(existLoc){
+           const { error: locationError } = await supabase
+                .from("location")
+                .insert({
+                  bien_id: request.bien.id,
+                  demande_id: request.id,
+                  date_debut: request.date_debut_location,
+                  date_fin: request.date_fin_location,
+                  client_id: existLoc.id,
+                  contrat_signe: true,
+                  date_signature: new Date().toTimeString(),
+                  statut: 'en_cours'
+                });
 
-        if (locationError) {
-          toast({
-            title: "Erreur",
-            description: "Erreur lors de la création de la location",
-            variant: "destructive",
-          });
-          throw locationError;
-        }
+            if (locationError) {
+              toast({
+                title: "Erreur",
+                description: "Erreur lors de la création de la location",
+                variant: "destructive",
+              });
+              throw locationError;
+            }
+          }else {
+            const { data: newClient, error: clientError } = await supabase
+                .from("client")
+                .insert({
+                  prenom: request.prenom,
+                  nom: request.nom,
+                  email: request.email,
+                  telephone: request.telephone,
+                });
+
+            if (clientError) throw clientError;
+
+              const {error: locationError} = await supabase
+                  .from("location")
+                  .insert({
+                    bien_id: request.bien.id,
+                    demande_id: request.id,
+                    date_debut: request.date_debut_location,
+                    date_fin: request.date_fin_location,
+                    client_id: newClient?.id,
+                    contrat_signe: true,
+                    date_signature: new Date().toTimeString(),
+                    statut: 'en_cours'
+                  });
+
+              if (locationError) {
+                toast({
+                  title: "Erreur",
+                  description: "Erreur lors de la création de la location",
+                  variant: "destructive",
+                });
+                throw locationError;
+              }
+            }
 
         const { error: bienError } = await supabase
           .from("bien")
@@ -417,7 +467,7 @@ export function RequestTable() {
       if (visitDate) {
         const { error: commentError } = await supabase
           .from("demande")
-          .update({ 
+          .update({
             commentaire: `Date de visite programmée : ${visitDate}${request.commentaire ? '\n' + request.commentaire : ''}`
           })
           .eq("id", request.id);
@@ -461,7 +511,7 @@ export function RequestTable() {
 
     setVisitScheduled(true);
 
-    const {data: existingData, error: fetchError} = await supabase
+    const {error: fetchError} = await supabase
         .from('demande')
         .select('commentaire')
         .eq('id', request.id)
@@ -484,8 +534,8 @@ export function RequestTable() {
       title: "Visite programmée",
       description: `La visite a été programmée pour le ${format(new Date(visitDate), 'dd/MM/yyyy')}`,
     });
+    window.location.reload();
     setShowDetailsDialog(false);
-
   };
 
   const handleViewDetails = (request: Request) => {
@@ -742,17 +792,27 @@ export function RequestTable() {
                           <Label htmlFor="idDocument">Pièce d'identité (PDF)</Label>
                           <div className="flex gap-2 items-center">
                             {selectedRequest.piece && (
-                                <div className="flex flex-col space-y-2">
-                                  <p className="font-semibold">Pièce d'identité</p>
-                                  <a
-                                      href={selectedRequest.piece}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 hover:underline"
-                                  >
-                                    Voir le document
-                                  </a>
-                                </div>
+                                <>
+                                  <div className="flex flex-col space-y-2">
+                                    <p className="font-semibold">Pièce d'identité</p>
+                                    <a
+                                        href={selectedRequest.piece}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:underline"
+                                    >
+                                      Voir le document
+                                    </a>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                        onClick={() => generateSalesContract(selectedRequest)}
+                                    >
+                                      Generer contrat
+                                    </Button>
+                                  </div>
+                                  </>
                             )}
                             {!selectedRequest.piece && (
                                 <>
@@ -769,14 +829,7 @@ export function RequestTable() {
                             Formats acceptés : PDF (carte d'identité ou passeport)
                           </p>
                         </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                            onClick={() => generateSalesContract(selectedRequest)}
-                        >
-                          Generer
-                        </Button></>
+                        </>
                   )}
                 </div>
               )}
@@ -807,7 +860,7 @@ export function RequestTable() {
                     <p className="mt-1">{selectedRequest.forfait || "Non spécifié"}</p>
                   </div>
 
-                  {!visitScheduled && selectedRequest.statut === "en_attente" && (
+                  {!visitScheduled && selectedRequest.statut === "en_attente" && !selectedRequest.commentaire && (
                     <div className="space-y-2">
                       <Label>Programmer une visite</Label>
                       <div className="flex gap-2">
@@ -829,7 +882,7 @@ export function RequestTable() {
                     </div>
                   )}
 
-                  {selectedRequest.statut === "en_attente" && (
+                  {selectedRequest.statut === "en_attente" && !selectedRequest.piece && (
                     <div className="space-y-2">
                       <Label htmlFor="idDocument">Pièce d'identité (PDF)</Label>
                       <div className="flex gap-2 items-center">
@@ -882,7 +935,7 @@ export function RequestTable() {
                 <Button
                   onClick={() => handleStatusUpdate(selectedRequest, "approuve")}
                   className="text-white bg-green-600 hover:bg-green-700"
-                  disabled={!visitScheduled || !idDocument}
+                  disabled={!selectedRequest.piece}
                 >
                   <Check className="mr-2 h-4 w-4" />
                   Conclure

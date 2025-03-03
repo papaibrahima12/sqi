@@ -4,7 +4,7 @@ import { Routes, Route, useNavigate } from "react-router-dom";
 import { PropertyTable } from "@/components/dashboard/PropertyTable";
 import { RequestTable } from "@/components/dashboard/RequestTable";
 import { LocationCalendar } from "@/components/dashboard/LocationCalendar";
-import { User, Building2, Calendar, FileText } from "lucide-react";
+import {User, Building2, Calendar, FileText, Home} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,34 @@ import PropertyDetail from "@/pages/PropertyDetail";
 import PropertyImagesPage from "@/components/property/PropertyImagePage.tsx";
 import {ClientsTable} from "@/components/dashboard/ClientsTable.tsx";
 import {ClientDetail} from "@/pages/ClientDetail.tsx";
+import {differenceInDays, endOfMonth, format, isWithinInterval, parseISO, startOfMonth} from "date-fns";
+
+interface DashboardStats {
+  biens: Array<any>;
+  locations: Array<{
+    id: number;
+    bien_id: number;
+    date_debut: string;
+    date_fin: string;
+    statut: string;
+    prix?: number;
+    bien?: {
+      id: number;
+      prix_journalier: string
+      residence_id?: number;
+      residence?: {
+        id: number;
+        nom: string;
+      }
+    }
+  }>;
+  demandes: Array<any>;
+  residences: Array<any>;
+}
+interface ResidenceRentDays {
+  nom: string;
+  jours: number;
+}
 
 const DashboardHome = () => {
   const { data: stats, isLoading, error } = useQuery({
@@ -47,7 +75,25 @@ const DashboardHome = () => {
 
         const { data: locations, error: locationsError } = await supabase
           .from('location')
-          .select('*');
+          .select(`
+            *,
+            bien(
+            id,
+            libelle,
+            type_transaction,
+            prix_journalier,
+            reference,
+            residence(
+              id,
+              nom
+            ),
+            client(
+              id,
+              nom,
+              prenom,
+              email
+              )
+          `);
         
         if (locationsError) throw locationsError;
 
@@ -65,7 +111,7 @@ const DashboardHome = () => {
         return {
           biens: biensWithPhotos || [],
           locations: locations || [],
-          demandes: demandes || [],
+          demandes: demandes || []
         };
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
@@ -87,6 +133,49 @@ const DashboardHome = () => {
   const biensDisponibles = stats?.biens.filter(b => b.statut === 'disponible') || [];
   const locationsEnCours = stats?.locations.filter(l => l.statut === 'en_cours') || [];
   const demandesEnAttente = stats?.demandes.filter(d => d.statut === 'en_attente') || [];
+
+  const currentMonthStart = startOfMonth(new Date());
+  const currentMonthEnd = endOfMonth(new Date());
+  const currentMonthName = format(new Date(), 'MMMM yyyy');
+  const calculateDaysRentedPerResidence = (): ResidenceRentDays[] => {
+    const residenceRentDays: Record<string, ResidenceRentDays> = {};
+    stats?.residences.forEach(residence => {
+      residenceRentDays[residence.id] = {
+        nom: residence.nom,
+        jours: 0
+      };
+    });
+    // Calculer les jours de location pour chaque résidence
+    stats?.locations.forEach(location => {
+      if (location.statut !== 'en_cours' && location.statut !== 'finalise') return;
+      // Si le bien n'a pas de résidence associée, ignorer
+      if (!location.bien?.residence?.id) return;
+      const residenceId = location.bien.residence?.id;
+      const residenceName = location.bien.residence?.nom || 'Inconnue';
+      // S'assurer que cette résidence est dans notre objet
+      if (!residenceRentDays[residenceId]) {
+        residenceRentDays[residenceId] = {
+          nom: residenceName,
+          jours: 0
+        };
+      }
+      const startDate = parseISO(location.date_debut);
+      const endDate = parseISO(location.date_fin);
+      // Déterminer l'intersection entre la période de location et le mois courant
+      const overlapStart = startDate > currentMonthStart ? startDate : currentMonthStart;
+      const overlapEnd = endDate < currentMonthEnd ? endDate : currentMonthEnd;
+      // Vérifier s'il y a une intersection
+      if (isWithinInterval(overlapStart, { start: currentMonthStart, end: currentMonthEnd }) ||
+          isWithinInterval(overlapEnd, { start: currentMonthStart, end: currentMonthEnd }) ||
+          (startDate <= currentMonthStart && endDate >= currentMonthEnd)) {
+        // Calculer le nombre de jours dans l'intersection
+        const daysInMonth = differenceInDays(overlapEnd, overlapStart) + 1;
+        residenceRentDays[residenceId].jours += Math.max(0, daysInMonth);
+      }
+    });
+    return Object.values(residenceRentDays);
+  };
+  const daysRentedPerResidence = calculateDaysRentedPerResidence();
 
   return (
     <div className="p-6 space-y-6">
@@ -155,6 +244,31 @@ const DashboardHome = () => {
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Home className="w-5 h-5 text-sqi-gold" />
+            <span>Jours loués par résidence ({currentMonthName})</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {daysRentedPerResidence.length > 0 ? (
+                daysRentedPerResidence.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between border-b pb-2 last:border-0">
+                      <div className="font-medium">{item.nom}</div>
+                      <div className="flex items-center">
+                        <span className="text-lg font-bold">{item.jours}</span>
+                        <span className="ml-1 text-sm text-muted-foreground">jour{item.jours !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                ))
+            ) : (
+                <div className="text-center text-muted-foreground">Aucune résidence avec des locations ce mois-ci</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
