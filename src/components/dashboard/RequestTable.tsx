@@ -231,66 +231,6 @@ export function RequestTable() {
     }
   };
 
-  const generateContract = async (request: Request) => {
-    try {
-      if (!request.bien) {
-        throw new Error("Information du bien manquante");
-      }
-
-      const { data: location, error: locationError } = await supabase
-        .from("location")
-        .select("*")
-        .eq("demande_id", request.id)
-        .single();
-
-      console.log('location', location);
-
-      if (locationError) throw locationError;
-
-      if (!location) {
-        toast({
-          title: "Erreur",
-          description: "Location non trouvée",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const response = await supabase.functions.invoke('generate-rental-contract', {
-        body: {
-          location: {
-            ...location,
-            tenant: {
-              nom: request.nom,
-              prenom: request.prenom,
-              email: request.email,
-              telephone: request.telephone
-            },
-            property: request.bien
-          }
-        }
-      });
-
-      if (response.error) throw response.error;
-
-      const contractUrl = response.data.signedUrl;
-      
-      window.open(contractUrl, '_blank');
-
-      toast({
-        title: "Contrat généré",
-        description: "Le contrat a été généré avec succès",
-      });
-    } catch (error) {
-      console.error("Erreur lors de la génération du contrat:", error);
-      toast({
-        title: "Erreur",
-        description: "Une erreur est survenue lors de la génération du contrat",
-        variant: "destructive",
-      });
-    }
-  };
-
   const generateSalesContract = async (request: Request) => {
     try {
       if (!request.bien) {
@@ -668,14 +608,6 @@ export function RequestTable() {
                         >
                           <FileText className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                          onClick={() => generateContract(request)}
-                        >
-                          <Download className="w-4 h-4" />
-                        </Button>
                       </>
                     )}
                     {request.statut === "en_attente" && request.type_demande !== "vente" && (
@@ -711,9 +643,27 @@ export function RequestTable() {
           <DialogHeader>
             <DialogTitle>Détails de la demande</DialogTitle>
             {selectedRequest?.type_demande === "location" && (
-              <DialogDescription>
-                Veuillez programmer une visite et charger une pièce d'identité avant d'approuver la demande de location
-              </DialogDescription>
+                <>
+                  <span
+                    className={`inline-block px-2 py-1 text-xs font-bolds rounded-full ${selectedRequest.statut === "approuve"
+                        ? "font-bold text-green-800"
+                        : selectedRequest.statut === "refuse"
+                            ? "font-bold text-red-800"
+                            : "font-bold text-yellow-800"}`}
+                >
+                              {selectedRequest.statut === "approuve"
+                                  ? "Approuvé"
+                                  : selectedRequest.statut === "refuse"
+                                      ? "Refusé"
+                                      : "En attente"}
+                          </span>
+                  <>
+                  <DialogDescription>
+                    Veuillez programmer une visite et charger une pièce d'identité avant d'approuver la demande de
+                    location
+                  </DialogDescription>
+                </>
+                </>
             )}
           </DialogHeader>
           
@@ -736,8 +686,9 @@ export function RequestTable() {
                   <div>
                     <Label>Statut de la demande</Label>
                     <Select
-                      value={selectedRequest.statut_vente}
-                      onValueChange={(value) => updateSalesStatus(selectedRequest, value as Request["statut_vente"])}
+                        disabled={selectedRequest.statut_vente === "gagnee"}
+                        value={selectedRequest.statut_vente}
+                        onValueChange={(value) => updateSalesStatus(selectedRequest, value as Request["statut_vente"])}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -786,50 +737,47 @@ export function RequestTable() {
                   )}
 
                   {selectedRequest.statut_vente === "gagnee" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="idDocument">Pièce d'identité (PDF)</Label>
-                        <div className="flex gap-2 items-center">
-                          {
-                            selectedRequest.piece && (
-                                  <div className="flex flex-col space-y-2">
-                                    <p className="font-semibold">Pièce d'identité</p>
-                                    <a
-                                        href={selectedRequest.piece}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:underline"
-                                    >
-                                      Voir le document
-                                    </a>
-                                  </div>
-                              )
-                          }
-                          {
-                            !selectedRequest.piece && (
-                                  <>
-                                    <Input
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="idDocument">Pièce d'identité (PDF)</Label>
+                          <div className="flex gap-2 items-center">
+                            {selectedRequest.piece && (
+                                <div className="flex flex-col space-y-2">
+                                  <p className="font-semibold">Pièce d'identité</p>
+                                  <a
+                                      href={selectedRequest.piece}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:underline"
+                                  >
+                                    Voir le document
+                                  </a>
+                                </div>
+                            )}
+                            {!selectedRequest.piece && (
+                                <>
+                                  <Input
                                       id="idDocument"
                                       type="file"
                                       required
                                       accept=".pdf"
                                       onChange={handleIdDocumentChange}/>
-                                    <span className="text-sm text-green-600">Document sélectionné</span></>
-                              )
-                          }
+                                  <span className="text-sm text-green-600">Document sélectionné</span></>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500">
+                            Formats acceptés : PDF (carte d'identité ou passeport)
+                          </p>
                         </div>
-                        <p className="text-sm text-gray-500">
-                          Formats acceptés : PDF (carte d'identité ou passeport)
-                        </p>
-                      </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => generateSalesContract(selectedRequest)}
+                        >
+                          Generer
+                        </Button></>
                   )}
-                  <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                      onClick={() => generateSalesContract(selectedRequest)}
-                  >
-                    Generer
-                  </Button>
                 </div>
               )}
 

@@ -1,11 +1,18 @@
-import React from "react";
+import {useEffect, useState} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Building2, MapPin, Ruler, ArrowLeft, Hash, Images, PhoneCall, Calendar, Star, History, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -49,7 +56,9 @@ interface PropertyDetailProps {
 const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState(null);
+  const [showDialog, setShowDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const numericId = id ? parseInt(id, 10) : NaN;
@@ -108,7 +117,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
     }
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (property) {
       form.reset({
         libelle: property.libelle,
@@ -148,6 +157,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
           date_fin,
           statut,
           client (
+            id,
             prenom,
             nom,
             email,
@@ -368,11 +378,15 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
     }
 
     return locationHistory.map((location) => {
+      console.log('location', location);
       const handleHistoryDocumentDownload = async (locationId: number) => {
         try {
           const { data: locationData } = await supabase
             .from('location')
-            .select('*')
+            .select(`
+              *,
+              client( id, nom, prenom, email, telephone)
+            `)
             .eq('id', locationId)
             .single();
 
@@ -421,10 +435,12 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       };
 
       return (
-        <div key={location.id} className="bg-gray-50 p-4 rounded-lg">
+          <div key={location.id} className="bg-gray-50 p-4 rounded-lg">
           <div className="flex justify-between items-center mb-2">
-            <div className="font-medium">
-              {location.client?.nom} {location.client?.prenom}
+            <div className="font-medium underline cursor-pointer ">
+              <a href={`/dashboard/locataires/${location?.client?.id}`}>
+                {location.client?.prenom} {location.client?.nom}
+              </a>
             </div>
             <div className="text-sm text-gray-600">
               Du {format(new Date(location.date_debut), 'dd/MM/yyyy')} au {format(new Date(location.date_fin), 'dd/MM/yyyy')}

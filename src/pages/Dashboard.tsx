@@ -21,6 +21,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import PropertyDetail from "@/pages/PropertyDetail";
 import PropertyImagesPage from "@/components/property/PropertyImagePage.tsx";
+import {ClientsTable} from "@/components/dashboard/ClientsTable.tsx";
+import {ClientDetail} from "@/pages/ClientDetail.tsx";
 
 const DashboardHome = () => {
   const { data: stats, isLoading, error } = useQuery({
@@ -176,6 +178,12 @@ const DashboardDemandes = () => (
   </div>
 );
 
+const DashboardClients = () => (
+    <div className="p-6">
+      <ClientsTable />
+    </div>
+);
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -243,6 +251,8 @@ export default function Dashboard() {
             <Route path="biens" element={<DashboardBiens />} />
             <Route path="locations" element={<DashboardLocations />} />
             <Route path="demandes" element={<DashboardDemandes />} />
+            <Route path="locataires" element={<DashboardClients />} />
+            <Route path="locataires/:id" element={<ClientDetail />} />
             <Route path="property/:id" element={<PropertyDetail isAdmin={true} />} />
             <Route path="property/:id/images" element={<PropertyImagesPage isAdmin={true} />} />
           </Routes>

@@ -1,6 +1,6 @@
 
 import { NavLink } from "react-router-dom";
-import {Home, Database, MapPin, ListCheck, Bell, Calendar} from "lucide-react";
+import {Home, Database, MapPin, ListCheck, Bell, Calendar, User2} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -35,6 +35,11 @@ const menuItems = [
     title: "Demandes",
     url: "/dashboard/demandes",
     icon: ListCheck,
+  },
+  {
+    title: "Locataires",
+    url: "/dashboard/locataires",
+    icon: User2,
   },
 ];
 

@@ -67,7 +67,6 @@ const Index = () => {
         `);
 
       if (startDate && endDate) {
-        // On récupère d'abord les IDs des biens qui ont des locations qui se chevauchent
         const { data: occupiedProperties, error } = await supabase
           .from('location')
           .select('bien_id')
@@ -97,10 +96,10 @@ const Index = () => {
       return biens.map(bien => ({
         ...bien,
         photos: bien.photo,
-        isAvailable: true // Tous les biens retournés sont disponibles car on a déjà filtré
+        isAvailable: true
       }));
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5,
   });
 
   const normalizeString = (str: string): string => {

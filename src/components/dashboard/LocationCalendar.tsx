@@ -33,7 +33,6 @@
   import { useForm } from "react-hook-form";
   import * as z from "zod";
   import { format, isAfter, parseISO } from "date-fns";
-  import { fr } from "date-fns/locale";
   import FullCalendar from "@fullcalendar/react";
   import dayGridPlugin from "@fullcalendar/daygrid";
   import interactionPlugin from "@fullcalendar/interaction";
@@ -50,8 +49,8 @@
     CardHeader,
     CardTitle,
   } from "@/components/ui/card";
-  import {Popover, PopoverContent, PopoverTrigger} from "@radix-ui/react-popover";
-  
+  import frLocale from "@fullcalendar/core/locales/fr";
+
   const MAX_FILE_SIZE = 5 * 1024 * 1024;
   const ACCEPTED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
   
@@ -225,7 +224,7 @@
       } else {
         setCurrentPrice(null);
       }
-    }, [form.watch('bien_id'), properties]);
+    }, [form, properties]);
   
     const { data: existingLocations = [], refetch: refetchLocations } = useQuery({
       queryKey: ['locations', selectedResidence, selectedDispo, selectedPieces, dateRange],
@@ -238,7 +237,13 @@
             date_fin,
             statut,
             cni_url,
-            client:client_id (prenom, nom, email, telephone),
+            client:client_id (
+                id, 
+                prenom, 
+                nom, 
+                email, 
+                telephone
+                ),
             bien:bien_id (
                id,
                libelle, 
@@ -307,6 +312,7 @@
               residence: location.bien.residence.nom,
               bien_statut: location.bien.statut,
               tenant: tenantInfo ? {
+                id: tenantInfo.id,
                 nom_complet: tenantInfo.prenom + " " + tenantInfo.nom,
                 email: tenantInfo.email,
                 telephone: tenantInfo.telephone
@@ -361,23 +367,40 @@
       }
     };
 
-    const generateContract = async (loc: Location) => {
+    const generateContract = async (loc: any) => {
       try {
-        console.log('location', loc?.extendedProps);
-        if (!loc?.extendedProps.bien) {
+        if (!loc.id) {
           throw new Error("Information du bien manquante");
         }
 
-        const { data: location, error: locationError } = await supabase
+        const { data: existLocation, error: locationError } = await supabase
             .from("location")
-            .select("*")
+            .select(`
+                  id,
+                  date_debut,
+                  date_fin,
+                  statut,
+                  cni_url,
+                  forfait,
+                  commentaire,
+                  contrat_signe,
+                  date_signature,
+                  client:client_id (id, prenom, nom, email, telephone),
+                  property:bien_id (
+                    id,
+                    libelle, 
+                    prix_journalier,
+                    residence (id, nom),
+                    statut,
+                    nb_pieces,
+                    reference
+                  )
+            `)
             .eq("id", loc.id)
             .single();
 
-
         if (locationError) throw locationError;
-
-        if (!location) {
+        if (!existLocation) {
           toast({
             title: "Erreur",
             description: "Location non trouvée",
@@ -387,26 +410,16 @@
         }
 
         const response = await supabase.functions.invoke('generate-rental-contract', {
-          body: {
-            location: {
-              ...location,
-              client: {
-                nom: loc.client.nom,
-                prenom: loc.client.prenom,
-                email: loc.client.email,
-                telephone: loc.client.telephone
-              },
-              property: loc.bien
-            }
-          }
+          body: { location: existLocation }
         });
 
-        if (response.error) throw response.error;
+        if (response.error) {
+          console.error('Function error details:', response.error);
+          throw response.error;
+        }
 
-        console.error('error', response.error)
 
         const contractUrl = response.data.signedUrl;
-
         window.open(contractUrl, '_blank');
 
         toast({
@@ -422,7 +435,6 @@
         });
       }
     };
-
 
     const clearFilters = () => {
       setSelectedResidence("all");
@@ -478,7 +490,7 @@
         const fileExt = pieceIdentite.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
   
-        const { data: fileData, error: uploadError } = await supabase.storage
+        const {error: uploadError } = await supabase.storage
           .from('piece_identite')
           .upload(fileName, pieceIdentite);
   
@@ -671,11 +683,15 @@
           initialView="dayGridMonth"
           selectable={true}
           select={onSelect}
-          locale={fr}
+          locale={frLocale}
           headerToolbar={{
             left: "prev,next today",
             center: "title",
-            right: "dayGridMonth",
+            right: "dayGridMonth"
+          }}
+          buttonText={{
+            today: "Aujourd'hui",
+            month: "Mois",
           }}
           events={existingLocations}
           eventClick={handleEventClick}
@@ -911,7 +927,11 @@
                 <TabsContent value="details">
                   <Card>
                     <CardHeader>
-                      <CardTitle>{selectedLocation.title}</CardTitle>
+                      <CardTitle className="underline cursor-pointer">
+                        <a href={`/dashboard/property/${selectedLocation?.extendedProps?.bien_id}`}>
+                          {selectedLocation.title}
+                        </a>
+                      </CardTitle>
                       <CardDescription>
                         Du {format(new Date(selectedLocation.start), 'dd/MM/yyyy')} au{' '}
                         {format(new Date(selectedLocation.end), 'dd/MM/yyyy')}
@@ -921,9 +941,11 @@
                       {selectedLocation.extendedProps.tenant && (
                         <div>
                           <p className="font-semibold">Locataire</p>
-                          <p>{selectedLocation.extendedProps.tenant.nom_complet}</p>
-                          <p>{selectedLocation.extendedProps.tenant.email}</p>
-                          <p>{selectedLocation.extendedProps.tenant.telephone}</p>
+                          <p className="underline cursor-pointer">
+                            <a href={`/dashboard/locataires/${selectedLocation?.extendedProps?.tenant?.id}`}>
+                              {selectedLocation.extendedProps.tenant.nom_complet}
+                            </a>
+                          </p>
                         </div>
                       )}
                       {!selectedLocation.extendedProps.tenant && (
