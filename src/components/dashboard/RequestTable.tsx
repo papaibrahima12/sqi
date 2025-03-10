@@ -31,6 +31,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {undefined} from "zod";
+import {cn} from "@/lib/utils.ts";
+import * as React from "react";
 
 type Request = {
   id: number;
@@ -71,14 +74,11 @@ export function RequestTable() {
   const [selectedStatus, setSelectedStatus] = useState<RequestStatus>("all");
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [showMotifDialog, setshowMotifDialog] = useState(false);
   const [visitDate, setVisitDate] = useState<string>("");
   const [visitScheduled, setVisitScheduled] = useState(false);
   const [motifPerte, setMotifPerte] = useState<string>("");
   const [idDocument, setIdDocument] = useState<File | null>(null);
-  const [showExistingClientDialog, setShowExistingClientDialog] = useState(false);
-  const [existingClients, setExistingClients] = useState<Client[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
-  const [clientOption, setClientOption] = useState<"existing" | "new">("new");
   const [tempVenteStatus, setTempVenteStatus] = useState<Request["statut_vente"] | null>(null);
   const [isStatusUpdating, setIsStatusUpdating] = useState(false);
 
@@ -109,23 +109,6 @@ export function RequestTable() {
       return data as Request[];
     },
   });
-
-  const uploadIdDocument = async (file: File, demandeId: number) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('demandeId', demandeId.toString());
-
-    const { data, error } = await supabase.functions.invoke('upload-id-document', {
-      body: formData,
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    return data;
-  };
-
   const handleIdDocumentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const request = selectedRequest;
 
@@ -191,9 +174,11 @@ export function RequestTable() {
           ...selectedRequest,
           statut_vente: 'gagnee'
         });
+
         setIdDocument(file);
         setShowDetailsDialog(false);
         setSelectedRequest(null);
+        await refetch();
         toast({
           title: "Finalisation de vente",
           description: "La vente a été finalisée avec succès",
@@ -209,17 +194,92 @@ export function RequestTable() {
     }
   };
 
+
+  const handleUploadPiece = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const request = selectedRequest;
+
+    if (!request || !request.id) {
+      toast({
+        title: "Erreur",
+        description: "Aucune demande sélectionnée",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.type !== 'application/pdf') {
+        toast({
+          title: "Format invalide",
+          description: "Veuillez sélectionner un fichier PDF",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        const fileName = `${request.id}_${crypto.randomUUID()}.pdf`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('piece_identite')
+            .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          toast({
+            title: "Erreur d'upload",
+            description: uploadError.message,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('piece_identite')
+            .getPublicUrl(fileName);
+
+        const { error: reqError } = await supabase
+            .from('demande')
+            .update({
+              piece: publicUrl,
+            })
+            .eq('id', request.id);
+
+        if (reqError) {
+          console.error('Mise à jour error:', reqError);
+          toast({
+            title: "Erreur de mise à jour",
+            description: reqError.message,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setIdDocument(file);
+
+      } catch (error) {
+        console.error("Erreur lors du téléchargement du document:", error);
+        toast({
+          title: "Erreur",
+          description: "Erreur lors du téléchargement de la pièce d'identité",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   const viewDocument = async (request: Request) => {
     try {
-      const { data: location, error: locationError } = await supabase
-        .from("location")
-        .select("cni_url")
-        .eq("demande_id", request.id)
+      const { data: demande, error: requestError } = await supabase
+        .from("demande")
+        .select("*")
+        .eq("id", request.id)
         .single();
 
-      if (locationError) throw locationError;
+      if (requestError) throw requestError;
 
-      if (!location?.cni_url) {
+      if (!demande?.piece) {
         toast({
           title: "Document non disponible",
           description: "Aucun document n'a été téléchargé pour cette demande",
@@ -228,14 +288,7 @@ export function RequestTable() {
         return;
       }
 
-      const { data: { signedUrl }, error: signedUrlError } = await supabase
-        .storage
-        .from("documents")
-        .createSignedUrl(location.cni_url, 60);
-
-      if (signedUrlError) throw signedUrlError;
-
-      window.open(signedUrl, '_blank');
+      window.open(demande.piece, '_blank');
     } catch (error) {
       console.error("Erreur lors de l'accès au document:", error);
       toast({
@@ -261,8 +314,6 @@ export function RequestTable() {
         }
       });
 
-      console.log('error', response.error);
-
       if (response.error) throw response.error;
 
       const contractUrl = response.data.signedUrl;
@@ -284,16 +335,15 @@ export function RequestTable() {
   };
 
   const updateSalesStatus = async (request: Request, newStatus: Request["statut_vente"]) => {
-    setSelectedRequest({
-      ...selectedRequest,
-      statut_vente: newStatus
-    });
     try {
-      const updates: { statut_vente: typeof newStatus; motif_perte?: string | null } = {
+      const updates: { statut_vente: Request["statut_vente"]; motif_perte?: string | null } = {
         statut_vente: newStatus,
       };
 
+      console.log('updates', updates);
+
       if (newStatus === "perdue") {
+        setTempVenteStatus("perdue")
         if (!motifPerte) {
           toast({
             title: "Motif requis",
@@ -305,58 +355,60 @@ export function RequestTable() {
         updates.motif_perte = motifPerte;
       }
 
-      if(newStatus == 'gagnee'){
-        setShowDetailsDialog(true);
-        if(!idDocument){
+      if (newStatus === "gagnee") {
+        setTempVenteStatus("gagnee");
+        if (!idDocument) {
           toast({
-            title: "La piece est requise",
-            description: "Veuillez charger la piece d'identité svp !",
+            title: "Pièce d'identité requise",
+            description: "Veuillez charger la pièce d'identité.",
             variant: "destructive",
           });
-          updates.statut_vente = "gagnee";
           return;
         }
+        setShowDetailsDialog(true);
       }
 
-      if(newStatus == 'negociation'){
-        setShowDetailsDialog(true);
-        if(!visitDate){
+      if (newStatus === "negociation") {
+        setTempVenteStatus("negociation")
+        if (!visitDate) {
           toast({
-            title: "La date de visite est requise",
-            description: "Veuillez selectionner une date de visite !",
+            title: "Date de visite requise",
+            description: "Veuillez sélectionner une date de visite.",
             variant: "destructive",
           });
           return;
         }
-        updates.statut_vente = "negociation";
         setShowDetailsDialog(false);
-        setSelectedRequest(null);
       }
-
 
       const { error } = await supabase
-        .from("demande")
-        .update(updates)
-        .eq("id", request.id);
+          .from("demande")
+          .update(updates)
+          .eq("id", request.id);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
+      setSelectedRequest((prev) => ({
+        ...prev,
+        statut_vente: newStatus,
+        motif_perte: newStatus === "perdue" ? motifPerte : null,
+      }));
 
       toast({
         title: "Statut mis à jour",
-        description: "Le statut de la demande a été mis à jour avec succès.",
+        description: "Le statut a été mis à jour avec succès.",
       });
 
-      window.location.reload();
-
       setShowDetailsDialog(false);
-      setSelectedRequest(null);
       setMotifPerte("");
       await refetch();
     } catch (error) {
       console.error("Erreur lors de la mise à jour du statut:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la mise à jour du statut",
+        description: "Une erreur est survenue lors de la mise à jour.",
         variant: "destructive",
       });
     }
@@ -364,43 +416,47 @@ export function RequestTable() {
 
   const handleStatusUpdate = async (request: Request, newStatus: "approuve" | "refuse") => {
     try {
-      if (request.type_demande === "location" && newStatus === "approuve") {
-        if (!request.commentaire) {
-          toast({
-            title: "Visite requise",
-            description: "Veuillez d'abord programmer une visite avant d'approuver la demande",
-            variant: "destructive",
-          });
-          return;
-        }
+      switch (newStatus) {
+        case "approuve": {
+          if (!visitDate) {
+            toast({
+              title: "Visite requise",
+              description: "Veuillez d'abord programmer une visite avant d'approuver la demande",
+              variant: "destructive",
+            });
+            return;
+          }
 
-        // if (!idDocument) {
-        //   toast({
-        //     title: "Document requis",
-        //     description: "Veuillez charger une pièce d'identité avant d'approuver la demande",
-        //     variant: "destructive",
-        //   });
-        //   return;
-        // }
+          if (!idDocument && !request.piece) {
+            toast({
+              title: "Document requis",
+              description: "Veuillez charger une pièce d'identité avant d'approuver la demande",
+              variant: "destructive",
+            });
+            return;
+          }
 
-      }
+          const {error: updateError} = await supabase
+              .from("demande")
+              .update({
+                statut: newStatus
+              })
+              .eq("id", request.id);
 
-      const { error: updateError } = await supabase
-        .from("demande")
-        .update({ statut: newStatus })
-        .eq("id", request.id);
+          if (updateError) throw updateError;
 
-      if (updateError) throw updateError;
+          console.log('updateError', updateError);
 
-      if (newStatus === "approuve" && request.type_demande === "location" && request.bien) {
-          const {data: existLoc, error: existLocError} = await
-              supabase.from('client')
-                      .select('*')
-                      .eq('email', request.email)
-                      .single();
+          const {data: existLoc, error: existLocError} = await supabase
+              .from('client')
+              .select('*')
+              .eq('email', request.email)
+              .single();
+
           if (existLocError) throw existLocError;
-          if(existLoc){
-           const { error: locationError } = await supabase
+
+          if (existLoc) {
+            const {error: locationError} = await supabase
                 .from("location")
                 .insert({
                   bien_id: request.bien.id,
@@ -409,8 +465,10 @@ export function RequestTable() {
                   date_fin: request.date_fin_location,
                   client_id: existLoc.id,
                   contrat_signe: true,
-                  date_signature: new Date().toTimeString(),
-                  statut: 'en_cours'
+                  cni_url: request.piece,
+                  date_signature: new Date().toISOString(),
+                  statut: 'en_cours',
+                  forfait: request.forfait,
                 });
 
             if (locationError) {
@@ -421,70 +479,114 @@ export function RequestTable() {
               });
               throw locationError;
             }
-          }else {
-            const { data: newClient, error: clientError } = await supabase
+          } else {
+            const {data: newClientData, error: clientError} = await supabase
                 .from("client")
                 .insert({
                   prenom: request.prenom,
                   nom: request.nom,
                   email: request.email,
+                  adresse: '',
                   telephone: request.telephone,
-                });
+                }).select().single();
 
             if (clientError) throw clientError;
 
-              const {error: locationError} = await supabase
-                  .from("location")
-                  .insert({
-                    bien_id: request.bien.id,
-                    demande_id: request.id,
-                    date_debut: request.date_debut_location,
-                    date_fin: request.date_fin_location,
-                    client_id: newClient?.id,
-                    contrat_signe: true,
-                    date_signature: new Date().toTimeString(),
-                    statut: 'en_cours'
-                  });
+            const clientId = newClientData ? newClientData.id : null;
 
-              if (locationError) {
-                toast({
-                  title: "Erreur",
-                  description: "Erreur lors de la création de la location",
-                  variant: "destructive",
+            const {error: locationError} = await supabase
+                .from("location")
+                .insert({
+                  bien_id: request.bien.id,
+                  demande_id: request.id,
+                  date_debut: request.date_debut_location,
+                  date_fin: request.date_fin_location,
+                  client_id: clientId,
+                  contrat_signe: true,
+                  date_signature: new Date().toISOString(),
+                  statut: 'en_cours',
+                  forfait: request.forfait,
                 });
-                throw locationError;
-              }
+
+            if (locationError) {
+              toast({
+                title: "Erreur",
+                description: "Erreur lors de la création de la location",
+                variant: "destructive",
+              });
+              throw locationError;
             }
+          }
 
-        const { error: bienError } = await supabase
-          .from("bien")
-          .update({ statut: "occupe" })
-          .eq("id", request.bien.id);
+          const {error: bienError} = await supabase
+              .from("bien")
+              .update({statut: "occupe"})
+              .eq("id", request.bien.id);
 
-        if (bienError) throw bienError;
+          if (bienError) throw bienError;
+
+        }
+
+          break;
+
+        case "refuse": {
+
+          if(!motifPerte){
+            toast({
+              title: "Motif requis",
+              description: "Veuillez saisir un motif de refus",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          setMotifPerte(motifPerte);
+
+          const {error: updateError} = await supabase
+              .from("demande")
+              .update({
+                statut: 'refuse',
+                motif_perte: motifPerte
+              })
+              .eq("id", request.id);
+
+          if (updateError) throw updateError;
+
+          toast({
+            title: "Statut mis à jour",
+            description: "La demande a été annulée avec succès.",
+          });
+          setshowMotifDialog(false);
+          setShowDetailsDialog(false);
+          setSelectedRequest(null);
+          await refetch();
+
+        }
+
       }
 
-      if (visitDate) {
-        const { error: commentError } = await supabase
-          .from("demande")
-          .update({
-            commentaire: `Date de visite programmée : ${visitDate}${request.commentaire ? '\n' + request.commentaire : ''}`
-          })
-          .eq("id", request.id);
 
-        if (commentError) throw commentError;
-      }
+      // if (visitDate) {
+      //   const { error: commentError } = await supabase
+      //     .from("demande")
+      //     .update({
+      //       commentaire: `Date de visite programmée : ${visitDate}${request.commentaire ? '\n' + request.commentaire : ''}`
+      //     })
+      //     .eq("id", request.id);
+      //
+      //   if (commentError) throw commentError;
+      // }
 
       toast({
         title: newStatus === "approuve" ? "Demande approuvée" : "Demande refusée",
         description: "Le statut de la demande a été mis à jour avec succès.",
       });
-
+      await refetch();
       setShowDetailsDialog(false);
       setSelectedRequest(null);
       setVisitDate("");
       setVisitScheduled(false);
-      await refetch();
+
     } catch (error) {
       console.error("Erreur lors de la mise à jour du statut:", error);
       toast({
@@ -504,6 +606,15 @@ export function RequestTable() {
       toast({
         title: "Date requise",
         description: "Veuillez sélectionner une date pour la visite",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if(request.type_demande === 'location' && visitDate > request.date_debut_location){
+      toast({
+        title: "Date invalide",
+        description: "La date de visite doit être antérieure à la date de début de la location",
         variant: "destructive",
       });
       return;
@@ -530,12 +641,18 @@ export function RequestTable() {
 
     if (updateError) throw updateError;
 
+    if(request.type_demande==="vente"){
+      toast({
+        title: "Visite programmée",
+        description: `La visite a été programmée pour le ${format(new Date(visitDate), 'dd/MM/yyyy')}`,
+      });
+      setShowDetailsDialog(false);
+    }
+
     toast({
       title: "Visite programmée",
       description: `La visite a été programmée pour le ${format(new Date(visitDate), 'dd/MM/yyyy')}`,
     });
-    window.location.reload();
-    setShowDetailsDialog(false);
   };
 
   const handleViewDetails = (request: Request) => {
@@ -674,7 +791,7 @@ export function RequestTable() {
                           variant="outline"
                           size="sm"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => handleStatusUpdate(request, "refuse")}
+                          onClick={() => setshowMotifDialog(true)}
                         >
                           <X className="w-4 h-4" />
                         </Button>
@@ -716,7 +833,7 @@ export function RequestTable() {
                 </>
             )}
           </DialogHeader>
-          
+
           {selectedRequest && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -764,9 +881,9 @@ export function RequestTable() {
                       />
                     </div>
                   )}
-                  {selectedRequest.type_demande=== 'vente' && selectedRequest.statut_vente === "negociation" && (
+                  {selectedRequest.type_demande=== 'vente' && tempVenteStatus === "negociation" && (
                       <div className="space-y-2">
-                        <Label>Programmer une visite</Label>
+                        <Label>Programmer une visite des lieux</Label>
                         <div className="flex gap-2">
                           <Input
                               type="date"
@@ -786,12 +903,10 @@ export function RequestTable() {
                       </div>
                   )}
 
-                  {selectedRequest.statut_vente === "gagnee" && (
                       <>
                         <div className="space-y-2">
-                          <Label htmlFor="idDocument">Pièce d'identité (PDF)</Label>
                           <div className="flex gap-2 items-center">
-                            {selectedRequest.piece && (
+                            {selectedRequest.statut_vente === "gagnee" && selectedRequest.piece && (
                                 <>
                                   <div className="flex flex-col space-y-2">
                                     <p className="font-semibold">Pièce d'identité</p>
@@ -801,7 +916,7 @@ export function RequestTable() {
                                         rel="noopener noreferrer"
                                         className="text-blue-600 hover:underline"
                                     >
-                                      Voir le document
+                                      Voir la pièce d'itentité
                                     </a>
                                     <Button
                                         variant="outline"
@@ -809,13 +924,13 @@ export function RequestTable() {
                                         className="text-green-600 hover:text-green-700 hover:bg-green-50"
                                         onClick={() => generateSalesContract(selectedRequest)}
                                     >
-                                      Generer contrat
+                                      Générer contrat
                                     </Button>
                                   </div>
                                   </>
                             )}
-                            {!selectedRequest.piece && (
-                                <>
+                            {tempVenteStatus==="gagnee" && (
+                                <><>
                                   <Input
                                       id="idDocument"
                                       type="file"
@@ -823,14 +938,13 @@ export function RequestTable() {
                                       accept=".pdf"
                                       onChange={handleIdDocumentChange}/>
                                   <span className="text-sm text-green-600">Document sélectionné</span></>
+                                  <p className="text-sm text-gray-500">
+                                    Formats acceptés : PDF (carte d'identité ou passeport)
+                                  </p></>
                             )}
                           </div>
-                          <p className="text-sm text-gray-500">
-                            Formats acceptés : PDF (carte d'identité ou passeport)
-                          </p>
                         </div>
                         </>
-                  )}
                 </div>
               )}
 
@@ -840,16 +954,16 @@ export function RequestTable() {
                     <div>
                       <label className="text-sm font-medium text-gray-500">Date de début</label>
                       <p className="mt-1">
-                        {selectedRequest.date_debut_location ? 
-                          format(new Date(selectedRequest.date_debut_location), "dd/MM/yyyy") : 
+                        {selectedRequest.date_debut_location ?
+                          format(new Date(selectedRequest.date_debut_location), "dd/MM/yyyy") :
                           "Non spécifiée"}
                       </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Date de fin</label>
                       <p className="mt-1">
-                        {selectedRequest.date_fin_location ? 
-                          format(new Date(selectedRequest.date_fin_location), "dd/MM/yyyy") : 
+                        {selectedRequest.date_fin_location ?
+                          format(new Date(selectedRequest.date_fin_location), "dd/MM/yyyy") :
                           "Non spécifiée"}
                       </p>
                     </div>
@@ -859,6 +973,15 @@ export function RequestTable() {
                     <label className="text-sm font-medium text-gray-500">Forfait</label>
                     <p className="mt-1">{selectedRequest.forfait || "Non spécifié"}</p>
                   </div>
+
+                  {
+                    selectedRequest.motif_perte && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Motif de rejet</label>
+                            <p className="mt-1">{selectedRequest.motif_perte || ""}</p>
+                          </div>
+                      )
+                  }
 
                   {!visitScheduled && selectedRequest.statut === "en_attente" && !selectedRequest.commentaire && (
                     <div className="space-y-2">
@@ -890,7 +1013,7 @@ export function RequestTable() {
                           id="idDocument"
                           type="file"
                           accept=".pdf"
-                          onChange={handleIdDocumentChange}
+                          onChange={handleUploadPiece}
                         />
                         {idDocument && (
                           <span className="text-sm text-green-600">
@@ -926,7 +1049,7 @@ export function RequestTable() {
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => handleStatusUpdate(selectedRequest, "refuse")}
+                  onClick={() => setshowMotifDialog(true)}
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                 >
                   <X className="mr-2 h-4 w-4" />
@@ -935,7 +1058,6 @@ export function RequestTable() {
                 <Button
                   onClick={() => handleStatusUpdate(selectedRequest, "approuve")}
                   className="text-white bg-green-600 hover:bg-green-700"
-                  disabled={!selectedRequest.piece}
                 >
                   <Check className="mr-2 h-4 w-4" />
                   Conclure
@@ -945,6 +1067,47 @@ export function RequestTable() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={showMotifDialog} onOpenChange={setshowMotifDialog}>
+        <DialogContent className="sm:max-w-[1000px]">
+          <DialogHeader>
+            <DialogTitle>Motif du rejet</DialogTitle>
+                    <DialogDescription>
+                      Veuillez saisir le motif du rejet de la demande.
+                    </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Label>Motif de la perte</Label>
+            <Textarea
+                placeholder="Saisissez le motif du rejet de la demande..."
+                value={motifPerte}
+                onChange={(e) => setMotifPerte(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+                <div className="flex gap-2">
+                  <Button
+                      variant="outline"
+                      onClick={() => handleStatusUpdate(selectedRequest, "refuse")}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Check className="mr-2 h-4 w-4" />
+                    Confirmer
+                  </Button>
+                  <Button
+                      onClick={() => setshowMotifDialog(false)}
+                      className="text-white bg-black "
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Fermer
+                  </Button>
+                </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

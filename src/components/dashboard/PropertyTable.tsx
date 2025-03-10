@@ -1,5 +1,3 @@
-
-import { useNavigate } from "react-router-dom";
 import { Property } from "@/types/property";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,7 +95,6 @@ export const PropertyTable = () => {
     const filePath = `${Math.random()}.${fileExt}`;
 
     try {
-      // 1. Upload the file to storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('property_images')
         .upload(filePath, file);

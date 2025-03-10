@@ -113,7 +113,6 @@ const Index = () => {
   };
 
   const filteredProperties = useMemo(() => {
-    console.log('Filtering properties with:', { selectedType, selectedLocation });
     return properties.filter(property => {
       if (selectedType && property.type_transaction !== selectedType) {
         return false;

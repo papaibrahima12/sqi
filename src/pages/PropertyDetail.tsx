@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger
@@ -57,12 +56,9 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState(null);
-  const [showDialog, setShowDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const numericId = id ? parseInt(id, 10) : NaN;
-
 
   const form = useForm({
     defaultValues: {
@@ -260,22 +256,38 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
     const email = formData.get('email') as string;
     const telephone = formData.get('telephone') as string;
 
-    const { error } = await supabase
-      .from('demande')
-      .insert({
-        bien_id: numericId,
-        date_debut_location: dateDebut,
-        date_fin_location: dateFin,
-        forfait,
-        nom,
-        prenom,
-        email,
-        telephone,
-        type_demande: property?.type_transaction || 'location',
-        statut: 'en_attente'
+    if(dateDebut > dateFin){
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: "La date de début ne peut pas être supérieure à la date de fin",
       });
+      return;
+    }
+
+    const statut = property?.type_transaction === 'location' ? 'en_attente' : null;
+    const statut_vente = property?.type_transaction === 'vente' ? 'nouveau' : null;
+
+    const { error } = await supabase
+        .from('demande')
+        .insert({
+          bien_id: numericId,
+          date_debut_location: dateDebut,
+          date_fin_location: dateFin,
+          forfait,
+          nom,
+          prenom,
+          email,
+          telephone,
+          type_demande: property?.type_transaction || 'location',
+          statut: statut,
+          statut_vente: statut_vente
+        })
+        .select()
+        .single();
 
     if (error) {
+      console.error('Erreur',error);
       toast({
         variant: "destructive",
         title: "Erreur",
@@ -284,12 +296,61 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       return;
     }
 
+    const clientPhone = "221" + telephone;
+
+    const dataCustomer = {
+      "phone": clientPhone,
+      "name": prenom
+    };
+
+    const responseClient = await fetch("http://localhost:8081/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dataCustomer),
+    });
+
+    const dataClient = await responseClient.json();
+
+    if (!dataClient.success) {
+      console.error("Erreur lors de l'envoi du message au client : " + JSON.stringify(dataClient.error));
+    }
+
+    const adminPhone = "221775545164";
+
+    const requestUrl = `${window.location.origin}/dashboard/demandes/`;
+
+    const dataAdmin = {
+      "phone": adminPhone,
+      "bien": property?.libelle,
+      "prenom": prenom,
+      "nom": nom,
+      "email": email,
+      "dateDebut": dateDebut,
+      "dateFin": dateDebut,
+      "link": requestUrl,
+    };
+
+    const responseAdmin = await fetch("http://localhost:8081/sendAdminMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dataAdmin),
+    });
+
+    console.log('admin resp', responseAdmin);
+
+    const adminResponseData = await responseAdmin.json();
+
+    if (!adminResponseData.success) {
+      console.error("Erreur lors de l'envoi du message à l'administrateur : " + JSON.stringify(adminResponseData.error));
+    }
+
     toast({
       title: "Demande envoyée",
       description: "Votre demande a été prise en compte. Un de nos agents vous contactera dans les plus brefs délais pour finaliser votre réservation. Merci de votre confiance !",
     });
     setOpen(false);
   };
+
   const { data: activeLocationWithDoc } = useQuery({
     queryKey: ['locationWithDoc', numericId],
     queryFn: async () => {

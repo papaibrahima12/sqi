@@ -1,51 +1,36 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { calculateRentalDaysPerMonth } from '@/utils/chartUtils';
-interface RentalDaysChartProps {
-    locations: any[];
-}
-export const RentalDaysChart: React.FC<RentalDaysChartProps> = ({ locations }) => {
-    const data = calculateRentalDaysPerMonth(locations);
+"use client"
+
+import React from "react";
+import {
+    Line, LineChart, CartesianGrid, Legend, ResponsiveContainer,
+    Tooltip, XAxis, YAxis, Label, ReferenceLine
+} from "recharts";
+
+type TDailyData = { month: string; jours: number; };
+type TResponsiveLineChartProps = { data: TDailyData[]; };
+
+export const ResponsiveLineChart = ({ data }: TResponsiveLineChartProps) => {
+    const tooltipStyle = { padding: "2px", fontSize: "10px" }
+
     return (
-        <Card className="col-span-3">
-            <CardHeader>
-                <CardTitle className="text-lg font-semibold">Jours de location par mois</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                        <XAxis
-                            dataKey="name"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 12 }}
-                        />
-                        <YAxis
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 12 }}
-                            width={30}
-                        />
-                        <Tooltip
-                            formatter={(value) => [`${value} jours`, 'Jours loués']}
-                            contentStyle={{
-                                backgroundColor: 'white',
-                                borderRadius: '6px',
-                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                                border: 'none'
-                            }}
-                        />
-                        <Bar
-                            dataKey="days"
-                            fill="#B8860B"
-                            radius={[4, 4, 0, 0]}
-                            animationDuration={1500}
-                            name="Jours loués"
-                        />
-                    </BarChart>
-                </ResponsiveContainer>
-            </CardContent>
-        </Card>
+        <ResponsiveContainer className="w-full" height={335} >
+            <LineChart
+                className="w-full" height={200}
+                data={data}
+            >
+                <CartesianGrid strokeDasharray="4,2"/>
+                <XAxis
+                    height={49} dataKey="month" style={{ fontSize: "12px" }}
+                    label={{value: "Mois", position: "insideBottom", fontSize: "14px"}}
+                />
+                <YAxis
+                    width={49} dataKey="jours" style={{ fontSize: "12px" }}
+                    label={{ value: "Nombres de jours loués par mois !", position: "insideLeft", fontSize: "14px", angle: "-90" }}
+                />
+                <Line type="monotone" dataKey="jours" stroke="#164e63" strokeWidth={2} opacity={0.6} />
+                <Tooltip itemStyle={tooltipStyle} contentStyle={tooltipStyle} />
+                <Legend verticalAlign="top" color="#164e63" />
+            </LineChart>
+        </ResponsiveContainer>
     );
 };

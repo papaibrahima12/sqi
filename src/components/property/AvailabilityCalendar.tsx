@@ -31,12 +31,10 @@ export function AvailabilityCalendar({ propertyId }: AvailabilityCalendarProps) 
   const isDateUnavailable = (date: Date) => {
     if (!reservations) return false;
 
-    // La date est dans le passé
     if (isBefore(startOfDay(date), startOfDay(new Date()))) {
       return true;
     }
 
-    // Vérifie si la date est dans une période de réservation
     return reservations.some((reservation) =>
       isWithinInterval(date, {
         start: new Date(reservation.date_debut),

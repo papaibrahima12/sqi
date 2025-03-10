@@ -253,7 +253,6 @@ export type Database = {
         Row: {
           bien_id: number | null
           client_id: number | null
-          caution: number
           cni_url: string | null
           commentaire: string | null
           contrat_signe: boolean | null
@@ -271,7 +270,6 @@ export type Database = {
         Insert: {
           bien_id?: number | null
           client_id?: number | null
-          caution: number
           cni_url?: string | null
           commentaire?: string | null
           contrat_signe?: boolean | null
@@ -289,7 +287,6 @@ export type Database = {
         Update: {
           bien_id?: number | null
           client_id?: number | null
-          caution?: number
           cni_url?: string | null
           commentaire?: string | null
           contrat_signe?: boolean | null

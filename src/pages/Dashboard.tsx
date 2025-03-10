@@ -23,32 +23,12 @@ import PropertyDetail from "@/pages/PropertyDetail";
 import PropertyImagesPage from "@/components/property/PropertyImagePage.tsx";
 import {ClientsTable} from "@/components/dashboard/ClientsTable.tsx";
 import {ClientDetail} from "@/pages/ClientDetail.tsx";
-import {differenceInDays, endOfMonth, format, isWithinInterval, parseISO, startOfMonth} from "date-fns";
+import {differenceInDays, endOfMonth, format, startOfMonth} from "date-fns";
+import {ResponsiveLineChart} from "@/components/dashboard/RentalDaysChart.tsx";
+import { fr } from 'date-fns/locale';
 
-interface DashboardStats {
-  biens: Array<any>;
-  locations: Array<{
-    id: number;
-    bien_id: number;
-    date_debut: string;
-    date_fin: string;
-    statut: string;
-    prix?: number;
-    bien?: {
-      id: number;
-      prix_journalier: string
-      residence_id?: number;
-      residence?: {
-        id: number;
-        nom: string;
-      }
-    }
-  }>;
-  demandes: Array<any>;
-  residences: Array<any>;
-}
 interface ResidenceRentDays {
-  nom: string;
+  month: string;
   jours: number;
 }
 
@@ -61,7 +41,7 @@ const DashboardHome = () => {
           .from('bien')
           .select(`
             *,
-            residence(
+            residence:residence_id(
               id,
               nom
             ),
@@ -86,7 +66,7 @@ const DashboardHome = () => {
             residence(
               id,
               nom
-            ),
+            )),
             client(
               id,
               nom,
@@ -134,48 +114,71 @@ const DashboardHome = () => {
   const locationsEnCours = stats?.locations.filter(l => l.statut === 'en_cours') || [];
   const demandesEnAttente = stats?.demandes.filter(d => d.statut === 'en_attente') || [];
 
-  const currentMonthStart = startOfMonth(new Date());
-  const currentMonthEnd = endOfMonth(new Date());
-  const currentMonthName = format(new Date(), 'MMMM yyyy');
+
   const calculateDaysRentedPerResidence = (): ResidenceRentDays[] => {
     const residenceRentDays: Record<string, ResidenceRentDays> = {};
-    stats?.residences.forEach(residence => {
-      residenceRentDays[residence.id] = {
-        nom: residence.nom,
-        jours: 0
-      };
-    });
-    // Calculer les jours de location pour chaque résidence
+
     stats?.locations.forEach(location => {
       if (location.statut !== 'en_cours' && location.statut !== 'finalise') return;
-      // Si le bien n'a pas de résidence associée, ignorer
-      if (!location.bien?.residence?.id) return;
-      const residenceId = location.bien.residence?.id;
-      const residenceName = location.bien.residence?.nom || 'Inconnue';
-      // S'assurer que cette résidence est dans notre objet
-      if (!residenceRentDays[residenceId]) {
-        residenceRentDays[residenceId] = {
-          nom: residenceName,
-          jours: 0
-        };
+
+      const startDate = new Date(location.date_debut);
+      const endDate = new Date(location.date_fin);
+
+      const months: string[] = [];
+      let currentMonth = new Date(startDate);
+
+      while (currentMonth <= endDate) {
+        months.push(format(currentMonth, 'MMMM yyyy'));
+        currentMonth.setMonth(currentMonth.getMonth() + 1);
+        currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       }
-      const startDate = parseISO(location.date_debut);
-      const endDate = parseISO(location.date_fin);
-      // Déterminer l'intersection entre la période de location et le mois courant
-      const overlapStart = startDate > currentMonthStart ? startDate : currentMonthStart;
-      const overlapEnd = endDate < currentMonthEnd ? endDate : currentMonthEnd;
-      // Vérifier s'il y a une intersection
-      if (isWithinInterval(overlapStart, { start: currentMonthStart, end: currentMonthEnd }) ||
-          isWithinInterval(overlapEnd, { start: currentMonthStart, end: currentMonthEnd }) ||
-          (startDate <= currentMonthStart && endDate >= currentMonthEnd)) {
-        // Calculer le nombre de jours dans l'intersection
+
+      months.forEach(monthKey => {
+        const [monthName, year] = monthKey.split(" ");
+        const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+        const monthStart = startOfMonth(new Date(Number(year), monthIndex, 1));
+        const monthEnd = endOfMonth(new Date(Number(year), monthIndex, 1));
+
+        const overlapStart = startDate > monthStart ? startDate : monthStart;
+        const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+
         const daysInMonth = differenceInDays(overlapEnd, overlapStart) + 1;
-        residenceRentDays[residenceId].jours += Math.max(0, daysInMonth);
-      }
+
+        console.log('Days in Month Calculation:', {
+          monthKey,
+          daysInMonth,
+          overlapStartTime: overlapStart.getTime(),
+          overlapEndTime: overlapEnd.getTime()
+        });
+
+        if (isNaN(daysInMonth)) {
+          console.error('NaN days for month:', {
+            monthKey,
+            overlapStart,
+            overlapEnd
+          });
+          return;
+        }
+
+        if (!residenceRentDays[monthKey]) {
+          residenceRentDays[monthKey] = {
+            month: monthKey,
+            jours: 0
+          };
+        }
+        console.log('days', daysInMonth);
+
+        residenceRentDays[monthKey].jours += Math.max(0, daysInMonth);
+      });
     });
-    return Object.values(residenceRentDays);
+
+    return Object.values(residenceRentDays).sort((a, b) =>
+        new Date(`1 ${a.month}`).getTime() - new Date(`1 ${b.month}`).getTime()
+    );
   };
+
   const daysRentedPerResidence = calculateDaysRentedPerResidence();
+  console.log('nombre de jours', daysRentedPerResidence);
 
   return (
     <div className="p-6 space-y-6">
@@ -216,7 +219,7 @@ const DashboardHome = () => {
             <div className="mt-4">
               <div className="text-sm">
                 Montant moyen : {stats?.locations.length 
-                  ? Math.round(stats.locations.reduce((acc, curr) => acc + Number(curr.prix_journalier), 0) / stats.locations.length)
+                  ? Math.round(stats.locations.reduce((acc, curr) => acc + Number(curr.bien.prix_journalier), 0) / stats.locations.length)
                   : 0} FCFA
               </div>
             </div>
@@ -248,26 +251,10 @@ const DashboardHome = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Home className="w-5 h-5 text-sqi-gold" />
-            <span>Jours loués par résidence ({currentMonthName})</span>
+            <span>Jours loués par mois </span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {daysRentedPerResidence.length > 0 ? (
-                daysRentedPerResidence.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between border-b pb-2 last:border-0">
-                      <div className="font-medium">{item.nom}</div>
-                      <div className="flex items-center">
-                        <span className="text-lg font-bold">{item.jours}</span>
-                        <span className="ml-1 text-sm text-muted-foreground">jour{item.jours !== 1 ? 's' : ''}</span>
-                      </div>
-                    </div>
-                ))
-            ) : (
-                <div className="text-center text-muted-foreground">Aucune résidence avec des locations ce mois-ci</div>
-            )}
-          </div>
-        </CardContent>
+        <ResponsiveLineChart data={daysRentedPerResidence} />
       </Card>
     </div>
   );
