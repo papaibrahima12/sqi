@@ -31,7 +31,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import {cn} from "@/lib/utils.ts";
 import * as React from "react";
 
 type Request = {
@@ -79,8 +78,11 @@ export function RequestTable() {
   const [motifPerte, setMotifPerte] = useState<string>("");
   const [idDocument, setIdDocument] = useState<File | null>(null);
   const [tempVenteStatus, setTempVenteStatus] = useState<Request["statut_vente"] | null>(null);
+  const [currentSalesStatus, setCurrentSalesStatus] = useState<Request["statut_vente"] | null>(null);
   const [isStatusUpdating, setIsStatusUpdating] = useState(false);
-
+  const [showVisitDateField, setShowVisitDateField] = useState(false);
+  const [showMotifPerteField, setShowMotifPerteField] = useState(false);
+  const [showIdDocumentField, setShowIdDocumentField] = useState(false);
 
   const { data: requests, refetch } = useQuery({
     queryKey: ["requests", selectedStatus],
@@ -108,6 +110,39 @@ export function RequestTable() {
       return data as Request[];
     },
   });
+
+  const resetFormStates = () => {
+    setVisitDate("");
+    setVisitScheduled(false);
+    setMotifPerte("");
+    setIdDocument(null);
+    setShowVisitDateField(false);
+    setShowMotifPerteField(false);
+    setShowIdDocumentField(false);
+  };
+
+  useEffect(() => {
+    if (selectedRequest) {
+      setCurrentSalesStatus(selectedRequest.statut_vente);
+      
+      if (selectedRequest.commentaire && selectedRequest.commentaire.includes("Date de visite programmée")) {
+        setVisitScheduled(true);
+      } else {
+        setVisitScheduled(false);
+      }
+      
+      resetFormStates();
+    }
+  }, [selectedRequest]);
+
+  useEffect(() => {
+    if (currentSalesStatus) {
+      setShowVisitDateField(currentSalesStatus === "negociation");
+      setShowMotifPerteField(currentSalesStatus === "perdue");
+      setShowIdDocumentField(currentSalesStatus === "gagnee");
+    }
+  }, [currentSalesStatus]);
+
   const handleIdDocumentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const request = selectedRequest;
 
@@ -139,7 +174,6 @@ export function RequestTable() {
             .upload(fileName, file);
 
         if (uploadError) {
-          console.error('Upload error:', uploadError);
           toast({
             title: "Erreur d'upload",
             description: uploadError.message,
@@ -169,18 +203,19 @@ export function RequestTable() {
           });
           return;
         }
-        setSelectedRequest({
-          ...selectedRequest,
-          statut_vente: 'gagnee'
+
+        setSelectedRequest(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            piece: publicUrl
+          };
         });
 
         setIdDocument(file);
-        setShowDetailsDialog(false);
-        setSelectedRequest(null);
-        await refetch();
         toast({
-          title: "Finalisation de vente",
-          description: "La vente a été finalisée avec succès",
+          title: "Document téléchargé",
+          description: "La pièce d'identité a été téléchargée avec succès",
         });
       } catch (error) {
         console.error("Erreur lors du téléchargement du document:", error);
@@ -338,8 +373,6 @@ export function RequestTable() {
       const updates: { statut_vente: Request["statut_vente"]; motif_perte?: string | null } = {
         statut_vente: newStatus,
       };
-
-      console.log('updates', updates);
 
       if (newStatus === "perdue") {
         setTempVenteStatus("perdue")
@@ -652,6 +685,8 @@ export function RequestTable() {
       title: "Visite programmée",
       description: `La visite a été programmée pour le ${format(new Date(visitDate), 'dd/MM/yyyy')}`,
     });
+
+    await refetch();
   };
 
   const handleViewDetails = (request: Request) => {
@@ -776,7 +811,7 @@ export function RequestTable() {
                         </Button>
                       </>
                     )}
-                    {request.statut === "en_attente" && request.type_demande !== "vente" && (
+                    {/* {request.statut === "en_attente" && request.type_demande !== "vente" && (
                       <>
                         <Button
                           variant="outline"
@@ -795,7 +830,7 @@ export function RequestTable() {
                           <X className="w-4 h-4" />
                         </Button>
                       </>
-                    )}
+                    )} */}
                   </div>
                 </TableCell>
               </TableRow>
@@ -852,7 +887,7 @@ export function RequestTable() {
                   <div>
                     <Label>Statut de la demande</Label>
                     <Select
-                        disabled={selectedRequest.statut_vente === "gagnee"}
+                        disabled={selectedRequest.statut_vente === "gagnee" || selectedRequest.statut_vente === "perdue"}
                         value={selectedRequest.statut_vente}
                         onValueChange={(value) => updateSalesStatus(selectedRequest, value as Request["statut_vente"])}
                     >
@@ -870,7 +905,7 @@ export function RequestTable() {
                     </Select>
                   </div>
 
-                  {selectedRequest.statut_vente === "perdue" && (
+                  {tempVenteStatus === "perdue" && (
                     <div className="space-y-4">
                       <Label>Motif de la perte</Label>
                       <Textarea
@@ -878,7 +913,17 @@ export function RequestTable() {
                         value={motifPerte}
                         onChange={(e) => setMotifPerte(e.target.value)}
                       />
+                      <div>
+                        <Button
+                            variant="secondary"
+                            className="shrink-0 bg-red-600"
+                        >
+                          <Check className="w-4 h-4" />
+                          Fermer
+                        </Button>
+                      </div>
                     </div>
+
                   )}
                   {selectedRequest.type_demande=== 'vente' && tempVenteStatus === "negociation" && (
                       <div className="space-y-2">
@@ -982,7 +1027,7 @@ export function RequestTable() {
                       )
                   }
 
-                  {!visitScheduled && selectedRequest.statut === "en_attente" && !selectedRequest.commentaire && (
+                  {!visitScheduled && selectedRequest.statut === "en_attente" && (
                     <div className="space-y-2">
                       <Label>Programmer une visite</Label>
                       <div className="flex gap-2">
@@ -1052,7 +1097,7 @@ export function RequestTable() {
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                 >
                   <X className="mr-2 h-4 w-4" />
-                  Annuler
+                  Rejeter
                 </Button>
                 <Button
                   onClick={() => handleStatusUpdate(selectedRequest, "approuve")}
@@ -1088,19 +1133,18 @@ export function RequestTable() {
           <DialogFooter>
                 <div className="flex gap-2">
                   <Button
+                      onClick={() => setshowMotifDialog(false)}
+                      className="text-white bg-black "
+                  >
+                    Fermer
+                  </Button>
+                  <Button
                       variant="outline"
                       onClick={() => handleStatusUpdate(selectedRequest, "refuse")}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
                     <Check className="mr-2 h-4 w-4" />
                     Confirmer
-                  </Button>
-                  <Button
-                      onClick={() => setshowMotifDialog(false)}
-                      className="text-white bg-black "
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Fermer
                   </Button>
                 </div>
           </DialogFooter>

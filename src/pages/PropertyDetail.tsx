@@ -296,6 +296,12 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       return;
     }
 
+    toast({
+      title: "Demande envoyée",
+      description: "Votre demande a été prise en compte. Un de nos agents vous contactera dans les plus brefs délais pour finaliser votre réservation. Merci de votre confiance !",
+    });
+    setOpen(false);
+
     const clientPhone = "221" + telephone;
 
     const dataCustomer = {
@@ -344,11 +350,6 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       console.error("Erreur lors de l'envoi du message à l'administrateur : " + JSON.stringify(adminResponseData.error));
     }
 
-    toast({
-      title: "Demande envoyée",
-      description: "Votre demande a été prise en compte. Un de nos agents vous contactera dans les plus brefs délais pour finaliser votre réservation. Merci de votre confiance !",
-    });
-    setOpen(false);
   };
 
   const { data: activeLocationWithDoc } = useQuery({
