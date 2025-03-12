@@ -458,7 +458,7 @@ export function RequestTable() {
             });
             return;
           }
-
+  
           if (!idDocument && !request.piece) {
             toast({
               title: "Document requis",
@@ -467,41 +467,47 @@ export function RequestTable() {
             });
             return;
           }
-
+  
           const {error: updateError} = await supabase
-              .from("demande")
-              .update({
-                statut: newStatus
-              })
-              .eq("id", request.id);
-
+            .from("demande")
+            .update({
+              statut: newStatus
+            })
+            .eq("id", request.id);
+  
           if (updateError) throw updateError;
-
-
-          const {data: existLoc, error: existLocError} = await supabase
-              .from('client')
-              .select('*')
-              .eq('email', request.email)
-              .maybeSingle();
-
+  
+          // Vérifier si le client existe déjà - Correction: ne pas utiliser .single() directement
+          const {data: existingClients, error: existLocError} = await supabase
+            .from('client')
+            .select('*')
+            .eq('email', request.email);
+  
           if (existLocError) throw existLocError;
-
-          if (existLoc) {
+  
+          // Utiliser le premier client s'il existe, sinon créer un nouveau
+          let clientId = null;
+          
+          if (existingClients && existingClients.length > 0) {
+            // Client existant trouvé
+            const existLoc = existingClients[0];
+            clientId = existLoc.id;
+            
             const {error: locationError} = await supabase
-                .from("location")
-                .insert({
-                  bien_id: request.bien.id,
-                  demande_id: request.id,
-                  date_debut: request.date_debut_location,
-                  date_fin: request.date_fin_location,
-                  client_id: existLoc.id,
-                  contrat_signe: true,
-                  cni_url: request.piece,
-                  date_signature: new Date().toISOString(),
-                  statut: 'en_cours',
-                  forfait: request.forfait,
-                });
-
+              .from("location")
+              .insert({
+                bien_id: request.bien.id,
+                demande_id: request.id,
+                date_debut: request.date_debut_location,
+                date_fin: request.date_fin_location,
+                client_id: clientId,
+                contrat_signe: true,
+                cni_url: request.piece,
+                date_signature: new Date().toISOString(),
+                statut: 'en_cours',
+                forfait: request.forfait,
+              });
+  
             if (locationError) {
               toast({
                 title: "Erreur",
@@ -511,36 +517,42 @@ export function RequestTable() {
               throw locationError;
             }
           } else {
+            // Création d'un nouveau client - Correction: ne pas utiliser .single() directement
             const {data: newClientData, error: clientError} = await supabase
-                .from("client")
-                .insert({
-                  prenom: request.prenom,
-                  nom: request.nom,
-                  email: request.email,
-                  adresse: '',
-                  telephone: request.telephone,
-                })
-                .select()
-                .single();
-
+              .from("client")
+              .insert({
+                prenom: request.prenom,
+                nom: request.nom,
+                email: request.email,
+                adresse: '',
+                telephone: request.telephone,
+              })
+              .select();
+  
             if (clientError) throw clientError;
-
-            const clientId = newClientData ? newClientData.id : null;
-
+  
+            // Vérifier si des données ont été retournées
+            if (newClientData && newClientData.length > 0) {
+              clientId = newClientData[0].id;
+            } else {
+              throw new Error("Impossible de créer un nouveau client");
+            }
+  
             const {error: locationError} = await supabase
-                .from("location")
-                .insert({
-                  bien_id: request.bien.id,
-                  demande_id: request.id,
-                  date_debut: request.date_debut_location,
-                  date_fin: request.date_fin_location,
-                  client_id: clientId,
-                  contrat_signe: true,
-                  date_signature: new Date().toISOString(),
-                  statut: 'en_cours',
-                  forfait: request.forfait,
-                });
-
+              .from("location")
+              .insert({
+                bien_id: request.bien.id,
+                demande_id: request.id,
+                date_debut: request.date_debut_location,
+                date_fin: request.date_fin_location,
+                client_id: clientId,
+                contrat_signe: true,
+                cni_url: request.piece,
+                date_signature: new Date().toISOString(),
+                statut: 'en_cours',
+                forfait: request.forfait,
+              });
+  
             if (locationError) {
               toast({
                 title: "Erreur",
@@ -550,20 +562,27 @@ export function RequestTable() {
               throw locationError;
             }
           }
-
+  
           const {error: bienError} = await supabase
-              .from("bien")
-              .update({statut: "occupe"})
-              .eq("id", request.bien.id);
-
+            .from("bien")
+            .update({statut: "occupe"})
+            .eq("id", request.bien.id);
+  
           if (bienError) throw bienError;
-
+          
+          toast({
+            title: "Demande approuvée",
+            description: "Le statut de la demande a été mis à jour avec succès.",
+          });
+          await refetch();
+          setShowDetailsDialog(false);
+          setSelectedRequest(null);
+          setVisitDate("");
+          setVisitScheduled(false);
         }
-
-          break;
-
+        break;
+  
         case "refuse": {
-
           if(!motifPerte){
             toast({
               title: "Motif requis",
@@ -572,19 +591,17 @@ export function RequestTable() {
             });
             return;
           }
-
-          setMotifPerte(motifPerte);
-
+  
           const {error: updateError} = await supabase
-              .from("demande")
-              .update({
-                statut: 'refuse',
-                motif_perte: motifPerte
-              })
-              .eq("id", request.id);
-
+            .from("demande")
+            .update({
+              statut: 'refuse',
+              motif_perte: motifPerte
+            })
+            .eq("id", request.id);
+  
           if (updateError) throw updateError;
-
+  
           toast({
             title: "Statut mis à jour",
             description: "La demande a été annulée avec succès.",
@@ -593,33 +610,9 @@ export function RequestTable() {
           setShowDetailsDialog(false);
           setSelectedRequest(null);
           await refetch();
-
         }
-
+        break;
       }
-
-
-      // if (visitDate) {
-      //   const { error: commentError } = await supabase
-      //     .from("demande")
-      //     .update({
-      //       commentaire: `Date de visite programmée : ${visitDate}${request.commentaire ? '\n' + request.commentaire : ''}`
-      //     })
-      //     .eq("id", request.id);
-      //
-      //   if (commentError) throw commentError;
-      // }
-
-      toast({
-        title: newStatus === "approuve" ? "Demande approuvée" : "Demande refusée",
-        description: "Le statut de la demande a été mis à jour avec succès.",
-      });
-      await refetch();
-      setShowDetailsDialog(false);
-      setSelectedRequest(null);
-      setVisitDate("");
-      setVisitScheduled(false);
-
     } catch (error) {
       console.error("Erreur lors de la mise à jour du statut:", error);
       toast({
