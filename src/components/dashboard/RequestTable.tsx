@@ -450,14 +450,6 @@ export function RequestTable() {
     try {
       switch (newStatus) {
         case "approuve": {
-          if (!visitDate) {
-            toast({
-              title: "Visite requise",
-              description: "Veuillez d'abord programmer une visite avant d'approuver la demande",
-              variant: "destructive",
-            });
-            return;
-          }
 
           if (!idDocument && !request.piece) {
             toast({
