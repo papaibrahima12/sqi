@@ -450,6 +450,14 @@ export function RequestTable() {
     try {
       switch (newStatus) {
         case "approuve": {
+          if (!visitDate) {
+            toast({
+              title: "Visite requise",
+              description: "Veuillez d'abord programmer une visite avant d'approuver la demande",
+              variant: "destructive",
+            });
+            return;
+          }
 
           if (!idDocument && !request.piece) {
             toast({
@@ -469,13 +477,12 @@ export function RequestTable() {
 
           if (updateError) throw updateError;
 
-          console.log('updateError', updateError);
 
           const {data: existLoc, error: existLocError} = await supabase
               .from('client')
               .select('*')
               .eq('email', request.email)
-              .single();
+              .maybeSingle();
 
           if (existLocError) throw existLocError;
 
@@ -512,7 +519,9 @@ export function RequestTable() {
                   email: request.email,
                   adresse: '',
                   telephone: request.telephone,
-                }).select().single();
+                })
+                .select()
+                .single();
 
             if (clientError) throw clientError;
 
