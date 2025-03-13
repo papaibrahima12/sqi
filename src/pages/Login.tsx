@@ -53,7 +53,7 @@ const Login = () => {
       <header className="fixed top-0 left-0 w-full h-header bg-sqi-white shadow-sm z-50">
         <div className="container mx-auto h-full flex items-center px-4">
           <img 
-            src="/lovable-uploads/373c7b04-910a-4cba-9bc2-8574323bc8e9.png" 
+            src="/lovable-uploads/7f374343-1968-4b5b-a9ab-9176cc5ea1fa.png" 
             alt="SQI Logo" 
             className="h-12 w-auto cursor-pointer"
             onClick={() => navigate('/')}
