@@ -204,6 +204,23 @@ export function RequestTable() {
           return;
         }
 
+        const { error: bienError } = await supabase
+            .from('bien')
+            .update({
+              statut: "vendu",
+            })
+            .eq('id', request.bien.id);
+
+          if (bienError) {
+              console.error('Mise à jour error:', reqError);
+              toast({
+                title: "Erreur de mise à jour",
+                description: bienError.message,
+                variant: "destructive",
+              });
+              return;
+          }
+
         setSelectedRequest(prev => {
           if (!prev) return null;
           return {
@@ -215,8 +232,12 @@ export function RequestTable() {
         setIdDocument(file);
         toast({
           title: "Document téléchargé",
-          description: "La pièce d'identité a été téléchargée avec succès",
+          description: "La pièce d'identité a été téléchargée avec succès et la vente a bien été cloturée",
         });
+        await refetch();
+        setShowDetailsDialog(false);
+        window.location.reload();
+        
       } catch (error) {
         console.error("Erreur lors du téléchargement du document:", error);
         toast({
@@ -370,6 +391,13 @@ export function RequestTable() {
 
   const updateSalesStatus = async (request: Request, newStatus: Request["statut_vente"]) => {
     try {
+
+      setSelectedRequest((prev) => ({
+        ...prev,
+        statut_vente: newStatus,
+        motif_perte: newStatus === "perdue" ? motifPerte : null,
+      }));
+
       const updates: { statut_vente: Request["statut_vente"]; motif_perte?: string | null } = {
         statut_vente: newStatus,
       };
@@ -385,6 +413,16 @@ export function RequestTable() {
           return;
         }
         updates.motif_perte = motifPerte;
+        setShowDetailsDialog(false);
+        const { error } = await supabase
+          .from("demande")
+          .update(updates)
+          .eq("id", request.id);
+
+      if (error) {
+        throw error;
+      }
+        await refetch();
       }
 
       if (newStatus === "gagnee") {
@@ -397,7 +435,16 @@ export function RequestTable() {
           });
           return;
         }
-        setShowDetailsDialog(true);
+        setShowDetailsDialog(false);
+        const { error } = await supabase
+          .from("demande")
+          .update(updates)
+          .eq("id", request.id);
+
+      if (error) {
+        throw error;
+      }
+      await refetch();
       }
 
       if (newStatus === "negociation") {
@@ -410,6 +457,14 @@ export function RequestTable() {
           });
           return;
         }
+        const { error } = await supabase
+          .from("demande")
+          .update(updates)
+          .eq("id", request.id);
+
+      if (error) {
+        throw error;
+      }
         setShowDetailsDialog(false);
       }
 
@@ -422,20 +477,15 @@ export function RequestTable() {
         throw error;
       }
 
-      setSelectedRequest((prev) => ({
-        ...prev,
-        statut_vente: newStatus,
-        motif_perte: newStatus === "perdue" ? motifPerte : null,
-      }));
-
       toast({
         title: "Statut mis à jour",
         description: "Le statut a été mis à jour avec succès.",
       });
 
       setShowDetailsDialog(false);
-      setMotifPerte("");
       await refetch();
+      setMotifPerte("");
+      setSelectedRequest(null);
     } catch (error) {
       console.error("Erreur lors de la mise à jour du statut:", error);
       toast({
@@ -477,7 +527,6 @@ export function RequestTable() {
   
           if (updateError) throw updateError;
   
-          // Vérifier si le client existe déjà - Correction: ne pas utiliser .single() directement
           const {data: existingClients, error: existLocError} = await supabase
             .from('client')
             .select('*')
@@ -485,11 +534,9 @@ export function RequestTable() {
   
           if (existLocError) throw existLocError;
   
-          // Utiliser le premier client s'il existe, sinon créer un nouveau
           let clientId = null;
           
           if (existingClients && existingClients.length > 0) {
-            // Client existant trouvé
             const existLoc = existingClients[0];
             clientId = existLoc.id;
             
@@ -517,7 +564,6 @@ export function RequestTable() {
               throw locationError;
             }
           } else {
-            // Création d'un nouveau client - Correction: ne pas utiliser .single() directement
             const {data: newClientData, error: clientError} = await supabase
               .from("client")
               .insert({
@@ -531,7 +577,6 @@ export function RequestTable() {
   
             if (clientError) throw clientError;
   
-            // Vérifier si des données ont été retournées
             if (newClientData && newClientData.length > 0) {
               clientId = newClientData[0].id;
             } else {
@@ -658,6 +703,24 @@ export function RequestTable() {
 
     const newComment = `Date de visite programmée : ${format(new Date(visitDate), 'dd/MM/yyyy')}`;
 
+    if(request.type_demande==="vente"){
+      const {error: updateError} = await supabase
+        .from("demande")
+        .update({
+          statut_vente: 'negociation',
+          commentaire: newComment
+        })
+        .eq("id", request.id);
+
+    if (updateError) throw updateError;
+      toast({
+        title: "Visite programmée",
+        description: `La visite a été programmée pour le ${format(new Date(visitDate), 'dd/MM/yyyy')}`,
+      });
+      setShowDetailsDialog(false);
+      await refetch();
+    }
+
     const {error: updateError} = await supabase
         .from("demande")
         .update({
@@ -667,13 +730,7 @@ export function RequestTable() {
 
     if (updateError) throw updateError;
 
-    if(request.type_demande==="vente"){
-      toast({
-        title: "Visite programmée",
-        description: `La visite a été programmée pour le ${format(new Date(visitDate), 'dd/MM/yyyy')}`,
-      });
-      setShowDetailsDialog(false);
-    }
+    setShowDetailsDialog(false);
 
     toast({
       title: "Visite programmée",
@@ -899,7 +956,7 @@ export function RequestTable() {
                     </Select>
                   </div>
 
-                  {tempVenteStatus === "perdue" && (
+                  {selectedRequest.statut_vente === "perdue" && (
                     <div className="space-y-4">
                       <Label>Motif de la perte</Label>
                       <Textarea

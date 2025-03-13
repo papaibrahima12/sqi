@@ -309,7 +309,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       "name": prenom
     };
 
-    const responseClient = await fetch("http://localhost:8081/sendMessage", {
+    const responseClient = await fetch("http://localhost:3000/sendMessageToRequester", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(dataCustomer),
@@ -321,7 +321,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       console.error("Erreur lors de l'envoi du message au client : " + JSON.stringify(dataClient.error));
     }
 
-    const adminPhone = "221775545164";
+    const adminPhone = "221781757613";
 
     const requestUrl = `${window.location.origin}/dashboard/demandes/`;
 
@@ -336,7 +336,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       "link": requestUrl,
     };
 
-    const responseAdmin = await fetch("http://localhost:8081/sendAdminMessage", {
+    const responseAdmin = await fetch("http://localhost:3000/sendMessageToAdmin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(dataAdmin),
