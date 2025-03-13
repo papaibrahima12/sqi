@@ -309,7 +309,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       "name": prenom
     };
 
-    const responseClient = await fetch("http://localhost:3000/sendMessageToRequester", {
+    const responseClient = await fetch("https://vertical-mastodon-lycs-a1a18eaf.koyeb.app/sendMessageToRequester", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(dataCustomer),
@@ -336,7 +336,7 @@ const PropertyDetail = ({ isAdmin = false }: PropertyDetailProps) => {
       "link": requestUrl,
     };
 
-    const responseAdmin = await fetch("http://localhost:3000/sendMessageToAdmin", {
+    const responseAdmin = await fetch("https://vertical-mastodon-lycs-a1a18eaf.koyeb.app/sendMessageToAdmin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(dataAdmin),
